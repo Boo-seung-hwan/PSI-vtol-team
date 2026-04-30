@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>drone_bringup</name>
+  <version>0.0.0</version>
+  <description>Bringup package for PX4 + ROS2 + vision + control</description>
+
+  <maintainer email="qntmdghkss@todo.todo">qntmdghkss</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_python</buildtool_depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <exec_depend>drone_control</exec_depend>
+  <exec_depend>drone_vision</exec_depend>
+  <exec_depend>drone_interfaces</exec_depend>
+  <exec_depend>px4_ros_com</exec_depend>
+  <exec_depend>px4_msgs</exec_depend>
+
+  <test_depend>ament_copyright</test_depend>
+  <test_depend>ament_flake8</test_depend>
+  <test_depend>ament_pep257</test_depend>
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

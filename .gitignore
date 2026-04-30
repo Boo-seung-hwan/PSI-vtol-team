@@ -1,0 +1,22 @@
+build/
+install/
+log/
+
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+.DS_Store
+.vscode/
+.idea/
+
+*.ulg
+*.log
+
+# Environment variables
+.env
+
+# External repositories
+px4/PX4-Autopilot/
+ros2/ws/src/px4_msgs/

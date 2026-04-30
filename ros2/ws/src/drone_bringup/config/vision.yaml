@@ -1,0 +1,5 @@
+yolo_detector:
+  ros__parameters:
+    model_path: /drone_stack/models/yolo/best.pt
+    image_topic: /camera/image_raw
+    confidence_threshold: 0.5

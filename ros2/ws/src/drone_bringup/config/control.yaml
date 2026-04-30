@@ -1,0 +1,5 @@
+offboard_controller:
+  ros__parameters:
+    setpoint_rate: 20.0
+    takeoff_height: 5.0
+    use_detection_target: true
