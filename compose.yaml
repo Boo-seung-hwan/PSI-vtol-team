@@ -30,7 +30,7 @@ services:
       - PX4_UXRCE_DDS_PORT=8888
       - PX4_UXRCE_DDS_AG_IP=microxrce-agent
       - PX4_GZ_WORLD=default
-      - PX4_MAKE_TARGET=gz_x500
+      - PX4_MAKE_TARGET=gz_standard_vtol
       - PX4_GZ_MODELS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models
       - PX4_GZ_WORLDS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
       - GZ_SIM_RESOURCE_PATH=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
