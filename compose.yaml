@@ -29,12 +29,18 @@ services:
       - NVIDIA_DRIVER_CAPABILITIES=all
       - PX4_UXRCE_DDS_PORT=8888
       - PX4_UXRCE_DDS_AG_IP=microxrce-agent
-
+      - PX4_GZ_WORLD=default
+      - PX4_MAKE_TARGET=gz_x500
+      - PX4_GZ_MODELS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models
+      - PX4_GZ_WORLDS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
+      - GZ_SIM_RESOURCE_PATH=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
     volumes:
       - ./px4:/workspace/px4
+      - ./models:/workspace/custom_models
       - /mnt/wslg:/mnt/wslg
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /run/user/1000:/run/user/1000
+
     working_dir: /workspace/px4
     command: ["/bin/bash", "/entrypoint.sh"]
     networks:
