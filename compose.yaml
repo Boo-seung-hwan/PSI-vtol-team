@@ -27,6 +27,7 @@ services:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
+      - GZ_PARTITION=drone_stack
       - PX4_UXRCE_DDS_PORT=8888
       - PX4_UXRCE_DDS_AG_IP=microxrce-agent
       - PX4_GZ_WORLD=default
@@ -61,9 +62,18 @@ services:
     container_name: ros2-vision
     stdin_open: true
     tty: true
+    environment:
+      - DISPLAY=:0
+      - WAYLAND_DISPLAY=wayland-0
+      - XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
+      - QT_X11_NO_MITSHM=1
+      - GZ_PARTITION=drone_stack
     volumes:
       - ./ros2:/workspace/ros2
       - ./models:/workspace/ml_models
+      - /mnt/wslg:/mnt/wslg
+      - /tmp/.X11-unix:/tmp/.X11-unix
+      - /run/user/1000:/run/user/1000
     working_dir: /workspace/ros2
     command: bash
     networks:

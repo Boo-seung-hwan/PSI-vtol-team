@@ -69,6 +69,7 @@ class OffboardController(Node):
             (0.0, 2.0, -2.0),
             (0.0, 0.0, -2.0),
         ]
+
         self.current_wp_idx = 0
         self.wp_reached_time = None
         self.acceptance_radius = 0.3
@@ -80,7 +81,8 @@ class OffboardController(Node):
 
         self.reset_stable_since = None
         self.reset_release_delay = 1.0
-           # home 기준점
+
+        # home 기준점
         self.home_position_initialized = False
         self.home_x = 0.0
         self.home_y = 0.0
@@ -132,7 +134,7 @@ class OffboardController(Node):
         heading_changed = (
             self.prev_heading_reset_counter is not None and
             self.vehicle_local_position.heading_reset_counter != self.prev_heading_reset_counter
-         )
+        )
 
         changed = xy_changed or z_changed or heading_changed
 
@@ -149,7 +151,7 @@ class OffboardController(Node):
             self.reset_stable_since = now
         else:
             if self.reset_detected and self.reset_stable_since is None:
-                 self.reset_stable_since = now
+                self.reset_stable_since = now
 
         self.prev_xy_reset_counter = self.vehicle_local_position.xy_reset_counter
         self.prev_z_reset_counter = self.vehicle_local_position.z_reset_counter
@@ -179,7 +181,6 @@ class OffboardController(Node):
             not self.home_position_initialized and
             self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD and
             self.vehicle_status.arming_state == VehicleStatus.ARMING_STATE_ARMED
-
         ):
             self.initialize_home_position()
 
@@ -193,7 +194,10 @@ class OffboardController(Node):
 
         # reset 발생 시 현재 위치 hold
         if self.reset_detected:
-            if self.reset_stable_since is not None and (now - self.reset_stable_since) < self.reset_release_delay:
+            if (
+                self.reset_stable_since is not None and
+                (now - self.reset_stable_since) < self.reset_release_delay
+            ):
                 self.reset_hold_x = current_x
                 self.reset_hold_y = current_y
                 self.reset_hold_z = current_z
@@ -208,11 +212,9 @@ class OffboardController(Node):
             if self.offboard_setpoint_counter % 10 == 0:
                 self.get_logger().error(
                     f"RESET HOLD | current=({current_x:.2f}, {current_y:.2f}, {current_z:.2f}), "
-                    f"hold_target=({target[0]:.2f}, {target[1]:.2f}, {target[2]:.2f})"
+                    f"hold_target=({target[0]:.2f}, {target[1]:.2f}, {target[2]:.2f}), "
                     f"err=({dx:.2f}, {dy:.2f}, {dz:.2f})"
                 )
-
-             return
 
             if self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
                 if self.vehicle_status.arming_state != VehicleStatus.ARMING_STATE_ARMED:
@@ -223,6 +225,16 @@ class OffboardController(Node):
                             f"Sending ARM request again during reset-hold, "
                             f"arming_state={self.vehicle_status.arming_state}"
                         )
+
+            if (
+                self.reset_stable_since is not None and
+                (now - self.reset_stable_since) >= self.reset_release_delay
+            ):
+                self.get_logger().warn("Local position reset stabilized. Re-initializing home position.")
+                self.initialize_home_position()
+                self.reset_detected = False
+                self.wp_reached_time = None
+                self.last_logged_wp_idx = -1
 
             self.offboard_setpoint_counter += 1
             return
@@ -257,6 +269,7 @@ class OffboardController(Node):
                 f"current=({current_x:.2f}, {current_y:.2f}, {current_z:.2f}), "
                 f"error={dist:.2f} m"
             )
+
         if self.home_position_initialized:
             if dist < self.acceptance_radius:
                 if self.wp_reached_time is None:
@@ -280,7 +293,6 @@ class OffboardController(Node):
                             self.get_logger().info("Final waypoint reached and hold complete. Sending LAND.")
                             self.publish_vehicle_command(VehicleCommand.VEHICLE_CMD_NAV_LAND)
                             self.final_wp_logged = True
-
             else:
                 self.wp_reached_time = None
 
@@ -298,7 +310,7 @@ class OffboardController(Node):
             return
 
         if self.vehicle_status.nav_state == VehicleStatus.NAVIGATION_STATE_OFFBOARD:
-    	    if self.vehicle_status.arming_state != VehicleStatus.ARMING_STATE_ARMED:
+            if self.vehicle_status.arming_state != VehicleStatus.ARMING_STATE_ARMED:
                 if now - self.last_arm_request_time > 1.0:
                     self.arm()
                     self.last_arm_request_time = now
@@ -362,3 +374,7 @@ def main(args=None):
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
