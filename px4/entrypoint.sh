@@ -49,6 +49,30 @@ done
 
 echo "[INFO] Starting PX4 SITL..."
 export PX4_GZ_STANDALONE=1
+
+# Auto-detect Windows/WSL host IP for QGroundControl.
+# In most WSL2 setups, /etc/resolv.conf nameserver points to the Windows host.
+export QGC_IP=${QGC_IP:-$(awk '/nameserver/ {print $2; exit}' /etc/resolv.conf)}
+
+echo "[INFO] QGC_IP=${QGC_IP}"
+
+RCS_FILE="/workspace/px4/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/rcS"
+QGC_BLOCK_START="# >>> AUTO_QGC_MAVLINK_START"
+QGC_BLOCK_END="# <<< AUTO_QGC_MAVLINK_END"
+
+# Remove old injected block to avoid duplicates.
+sed -i "/${QGC_BLOCK_START}/,/${QGC_BLOCK_END}/d" "$RCS_FILE"
+
+cat <<EOF >> "$RCS_FILE"
+
+${QGC_BLOCK_START}
+if [ -n "\$QGC_IP" ]; then
+    echo "[INFO] Starting extra MAVLink route to QGC at \$QGC_IP:14550"
+    mavlink start -x -u 14558 -r 400000 -t \$QGC_IP -o 14550
+fi
+${QGC_BLOCK_END}
+EOF
+
 make px4_sitl ${PX4_MAKE_TARGET}
 
 wait $GZ_PID
