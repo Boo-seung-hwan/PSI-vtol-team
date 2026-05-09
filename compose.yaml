@@ -28,7 +28,8 @@ services:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
-      # - GZ_PARTITION=drone_stack
+      - GZ_PARTITION=px4-gz
+      #- GZ_RELAY=ros2-vision
       - MAV_BROADCAST=1
       - PX4_SIM_HOST_ADDR=host.docker.internal
       - PX4_UXRCE_DDS_PORT=8888
@@ -65,12 +66,16 @@ services:
     container_name: ros2-vision
     stdin_open: true
     tty: true
+    depends_on:
+      - px4-gazebo
+    network_mode: "service:px4-gazebo"
     environment:
       - DISPLAY=:0
       - WAYLAND_DISPLAY=wayland-0
       - XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
       - QT_X11_NO_MITSHM=1
-      # - GZ_PARTITION=drone_stack
+      - GZ_PARTITION=px4-gz
+      #- GZ_RELAY=px4-gazebo
     volumes:
       - ./ros2:/workspace/ros2
       - ./models:/workspace/ml_models
@@ -79,8 +84,6 @@ services:
       - /run/user/1000:/run/user/1000
     working_dir: /workspace/ros2
     command: bash
-    networks:
-      - drone_net
     deploy:
       resources:
         reservations:

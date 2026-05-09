@@ -21,19 +21,56 @@ export PX4_UXRCE_DDS_AG_IP=${PX4_UXRCE_DDS_AG_IP:-microxrce-agent}
 export PX4_GZ_WORLD=${PX4_GZ_WORLD:-default}
 export PX4_MAKE_TARGET=${PX4_MAKE_TARGET:-gz_standard_vtol}
 
+export PX4_GZ_WORLD=${PX4_GZ_WORLD:-default}
 export PX4_GZ_WORLD_PATH=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
 export PX4_GZ_MODELS=${PX4_GZ_MODELS:-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models}
-export PX4_GZ_WORLDS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
+export PX4_GZ_MODEL_DIR=${PX4_GZ_MODEL_DIR:-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models}
+
 
 export GZ_SIM_RESOURCE_PATH=/workspace/custom_models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds:${GZ_SIM_RESOURCE_PATH}
 export GZ_SIM_SYSTEM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/gz-sim-8/plugins:${GZ_SIM_SYSTEM_PLUGIN_PATH}
 
-unset GZ_PARTITION
-echo "[INFO] GZ_PARTITION has been unset for PX4-Gazebo world discovery"
+export GZ_PARTITION=${GZ_PARTITION:-px4_gz}
+export GZ_IP=$(hostname -I | awk '{print $1}')
 
+#unset GZ_PARTITION
+echo "[INFO] GZ_PARTITI=${GZ_PARTITION}"
+echo "[INFO] GZ_RELAY=${GZ_RELAY}"
+echo "[INFO] GZ_IP=${GZ_IP}"
 echo "[INFO] Applying custom Gazebo models..."
 
-PX4_GZ_MODEL_DIR="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models"
+echo "[INFO] Ensuring Gazebo world has required system plugins..."
+
+WORLD_FILE="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds/${PX4_GZ_WORLD}.sdf"
+
+python3 - <<PY
+from pathlib import Path
+
+world = Path("${WORLD_FILE}")
+text = world.read_text()
+
+insert = """
+    <plugin
+      filename="gz-sim-user-commands-system"
+      name="gz::sim::systems::UserCommands">
+    </plugin>
+
+    <plugin
+      filename="gz-sim-scene-broadcaster-system"
+      name="gz::sim::systems::SceneBroadcaster">
+    </plugin>
+"""
+
+if "gz-sim-user-commands-system" not in text:
+    text = text.replace("</world>", insert + "\\n  </world>")
+    world.write_text(text)
+    print("[INFO] Added UserCommands and SceneBroadcaster plugins to world.")
+else:
+    print("[INFO] Required Gazebo world plugins already present.")
+PY
+
+# PX4_GZ_MODEL_DIR is already exported above.
+#PX4_GZ_MODEL_DIR="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models"
 
 if [ -d /workspace/custom_models/standard_vtol ]; then
   echo "[INFO] Override PX4 standard_vtol with custom standard_vtol"
@@ -48,8 +85,7 @@ if [ -d /workspace/custom_models/mono_cam ]; then
 fi
 
 echo "[INFO] Verifying custom camera model:"
-grep -n "mono_cam\|mono_cam_joint\|mono_cam::camera_link" "${PX4_GZ_MODEL_DIR}/standard_vtol/model.sdf" || true
-grep -n "/vtol/camera" "${PX4_GZ_MODEL_DIR}/mono_cam/model.sdf" || true
+grep -n "vtol_camera_link\|vtol_camera_joint\|/vtol/camera\|sensor name=\"camera\"" "${PX4_GZ_MODEL_DIR}/standard_vtol/model.sdf" || true
 
 echo "[INFO] PX4_UXRCE_DDS_AG_IP=${PX4_UXRCE_DDS_AG_IP}"
 echo "[INFO] PX4_UXRCE_DDS_PORT=${PX4_UXRCE_DDS_PORT}"
@@ -57,32 +93,33 @@ echo "[INFO] PX4_GZ_WORLD=${PX4_GZ_WORLD}"
 echo "[INFO] PX4_MAKE_TARGET=${PX4_MAKE_TARGET}"
 echo "[INFO] GZ_SIM_RESOURCE_PATH=${GZ_SIM_RESOURCE_PATH}"
 
-echo "[INFO] Starting Gazebo first..."
-gz sim --verbose=4 -r -s /workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds/${PX4_GZ_WORLD}.sdf &
-GZ_PID=$!
+# echo "[INFO] Starting Gazebo first..."
+# gz sim --verbose=4 -r -s /workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds/${PX4_GZ_WORLD}.sdf &
+# GZ_PID=$!
 
 export MAV_BROADCAST=1
 
-echo "[INFO] Waiting for Gazebo world services..."
-for i in $(seq 1 90); do
-  if gz service -l | grep -q "/world/${PX4_GZ_WORLD}/create" && \
-     gz service -l | grep -q "/world/${PX4_GZ_WORLD}/state"; then
-    echo "[INFO] Gazebo world services are ready."
-    break
-  fi
+#echo "[INFO] Waiting for Gazebo world services..."
+#for i in $(seq 1 90); do
+#  if gz service -l | grep -q "/world/${PX4_GZ_WORLD}/create" && \
+#    gz service -l | grep -q "/world/${PX4_GZ_WORLD}/state"; then
+#    echo "[INFO] Gazebo world services are ready."
+#    break
+#  fi
 
-  if [ "$i" -eq 90 ]; then
-    echo "[ERROR] Gazebo world services were not ready."
-    gz service -l || true
-    exit 1
-  fi
+#  if [ "$i" -eq 90 ]; then
 
-  sleep 1
-done
+#    echo "[ERROR] Gazebo world services were not ready."
+#    gz service -l || true
+#    exit 1
+#  fi
+
+#  sleep 1
+#done
 
 
 echo "[INFO] Starting PX4 SITL..."
-export PX4_GZ_STANDALONE=1
+#export PX4_GZ_STANDALONE=1
 
 WINDOWS_HOST_IP=$(grep -oP '(?<=host\()\d+\.\d+\.\d+\.\d+(?=\))' /etc/resolv.conf)
 
@@ -124,4 +161,4 @@ grep -n "AUTO_QGC_MAVLINK\|14558\|14560\|$QGC_HOST_IP" "$RCS_FILE" || true
 
 make px4_sitl ${PX4_MAKE_TARGET}
 
-wait $GZ_PID
+#wait $GZ_PID
