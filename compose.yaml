@@ -28,7 +28,7 @@ services:
       - QT_X11_NO_MITSHM=1
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=all
-      - GZ_PARTITION=drone_stack
+      # - GZ_PARTITION=drone_stack
       - MAV_BROADCAST=1
       - PX4_SIM_HOST_ADDR=host.docker.internal
       - PX4_UXRCE_DDS_PORT=8888
@@ -70,7 +70,7 @@ services:
       - WAYLAND_DISPLAY=wayland-0
       - XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
       - QT_X11_NO_MITSHM=1
-      - GZ_PARTITION=drone_stack
+      # - GZ_PARTITION=drone_stack
     volumes:
       - ./ros2:/workspace/ros2
       - ./models:/workspace/ml_models

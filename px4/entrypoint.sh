@@ -28,6 +28,8 @@ export PX4_GZ_WORLDS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
 export GZ_SIM_RESOURCE_PATH=/workspace/custom_models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds:${GZ_SIM_RESOURCE_PATH}
 export GZ_SIM_SYSTEM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/gz-sim-8/plugins:${GZ_SIM_SYSTEM_PLUGIN_PATH}
 
+unset GZ_PARTITION
+echo "[INFO] GZ_PARTITION has been unset for PX4-Gazebo world discovery"
 
 echo "[INFO] Applying custom Gazebo models..."
 
@@ -61,12 +63,20 @@ GZ_PID=$!
 
 export MAV_BROADCAST=1
 
-echo "[INFO] Waiting for Gazebo create service..."
-for i in $(seq 1 60); do
-  if gz service -l | grep -q "/world/${PX4_GZ_WORLD}/create"; then
-    echo "[INFO] Gazebo create service is ready."
+echo "[INFO] Waiting for Gazebo world services..."
+for i in $(seq 1 90); do
+  if gz service -l | grep -q "/world/${PX4_GZ_WORLD}/create" && \
+     gz service -l | grep -q "/world/${PX4_GZ_WORLD}/state"; then
+    echo "[INFO] Gazebo world services are ready."
     break
   fi
+
+  if [ "$i" -eq 90 ]; then
+    echo "[ERROR] Gazebo world services were not ready."
+    gz service -l || true
+    exit 1
+  fi
+
   sleep 1
 done
 
