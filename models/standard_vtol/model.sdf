@@ -843,16 +843,70 @@
     </plugin>
     <static>0</static>
 
-    <!-- Team default camera -->
-    <include>
-      <uri>model://mono_cam</uri>
-      <name>mono_cam</name>
+    <!-- Team default onboard camera: directly embedded to avoid nested model sensor issues -->
+    <link name="vtol_camera_link">
       <pose>0.25 0 -0.05 0 0 0</pose>
-    </include>
 
-    <joint name="mono_cam_joint" type="fixed">
+      <inertial>
+        <pose>0 0 0 0 0 0</pose>
+        <mass>0.050</mass>
+        <inertia>
+          <ixx>0.00004</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.00004</iyy>
+          <iyz>0</iyz>
+          <izz>0.00004</izz>
+        </inertia>
+      </inertial>
+
+      <visual name="vtol_camera_housing">
+        <geometry>
+          <box>
+            <size>0.02 0.04 0.04</size>
+          </box>
+        </geometry>
+      </visual>
+
+      <visual name="vtol_camera_lens">
+        <pose>0.015 0 0 0 1.5707 0</pose>
+        <geometry>
+          <cylinder>
+            <radius>0.008</radius>
+            <length>0.01</length>
+          </cylinder>
+        </geometry>
+      </visual>
+
+      <sensor name="camera" type="camera">
+        <always_on>1</always_on>
+        <update_rate>30</update_rate>
+        <topic>/vtol/camera</topic>
+        <gz_frame_id>vtol_camera_link</gz_frame_id>
+        <pose>0 0 0 0 0 0</pose>
+        <camera>
+          <horizontal_fov>1.74</horizontal_fov>
+          <image>
+            <width>1280</width>
+            <height>960</height>
+            <format>R8G8B8</format>
+          </image>
+          <clip>
+            <near>0.1</near>
+            <far>3000</far>
+          </clip>
+        </camera>
+        <visualize>true</visualize>
+      </sensor>
+
+      <gravity>true</gravity>
+      <velocity_decay/>
+      <self_collide>false</self_collide>
+    </link>
+
+    <joint name="vtol_camera_joint" type="fixed">
       <parent>base_link</parent>
-      <child>mono_cam::camera_link</child>
+      <child>vtol_camera_link</child>
     </joint>
 
   </model>
