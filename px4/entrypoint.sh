@@ -19,14 +19,35 @@ export PX4_UXRCE_DDS_PORT=${PX4_UXRCE_DDS_PORT:-8888}
 export PX4_UXRCE_DDS_AG_IP=${PX4_UXRCE_DDS_AG_IP:-microxrce-agent}
 
 export PX4_GZ_WORLD=${PX4_GZ_WORLD:-default}
-export PX4_MAKE_TARGET=${PX4_MAKE_TARGET:-gz_x500}
+export PX4_MAKE_TARGET=${PX4_MAKE_TARGET:-gz_standard_vtol}
 
 export PX4_GZ_WORLD_PATH=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
-export PX4_GZ_MODELS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models
+export PX4_GZ_MODELS=${PX4_GZ_MODELS:-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models}
 export PX4_GZ_WORLDS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
 
 export GZ_SIM_RESOURCE_PATH=/workspace/custom_models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds:${GZ_SIM_RESOURCE_PATH}
 export GZ_SIM_SYSTEM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/gz-sim-8/plugins:${GZ_SIM_SYSTEM_PLUGIN_PATH}
+
+
+echo "[INFO] Applying custom Gazebo models..."
+
+PX4_GZ_MODEL_DIR="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models"
+
+if [ -d /workspace/custom_models/standard_vtol ]; then
+  echo "[INFO] Override PX4 standard_vtol with custom standard_vtol"
+  rm -rf "${PX4_GZ_MODEL_DIR}/standard_vtol"
+  cp -r /workspace/custom_models/standard_vtol "${PX4_GZ_MODEL_DIR}/standard_vtol"
+fi
+
+if [ -d /workspace/custom_models/mono_cam ]; then
+  echo "[INFO] Override PX4 mono_cam with custom mono_cam"
+  rm -rf "${PX4_GZ_MODEL_DIR}/mono_cam"
+  cp -r /workspace/custom_models/mono_cam "${PX4_GZ_MODEL_DIR}/mono_cam"
+fi
+
+echo "[INFO] Verifying custom camera model:"
+grep -n "mono_cam\|mono_cam_joint\|mono_cam::camera_link" "${PX4_GZ_MODEL_DIR}/standard_vtol/model.sdf" || true
+grep -n "/vtol/camera" "${PX4_GZ_MODEL_DIR}/mono_cam/model.sdf" || true
 
 echo "[INFO] PX4_UXRCE_DDS_AG_IP=${PX4_UXRCE_DDS_AG_IP}"
 echo "[INFO] PX4_UXRCE_DDS_PORT=${PX4_UXRCE_DDS_PORT}"
