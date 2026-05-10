@@ -27,7 +27,7 @@ export PX4_GZ_MODELS=${PX4_GZ_MODELS:-/workspace/px4/PX4-Autopilot/Tools/simulat
 export PX4_GZ_MODEL_DIR=${PX4_GZ_MODEL_DIR:-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models}
 
 
-export GZ_SIM_RESOURCE_PATH=/workspace/custom_models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds:${GZ_SIM_RESOURCE_PATH}
+export GZ_SIM_RESOURCE_PATH=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models:/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds:/workspace/custom_models:${GZ_SIM_RESOURCE_PATH}
 export GZ_SIM_SYSTEM_PLUGIN_PATH=/usr/lib/x86_64-linux-gnu/gz-sim-8/plugins:${GZ_SIM_SYSTEM_PLUGIN_PATH}
 
 export GZ_PARTITION=${GZ_PARTITION:-px4_gz}
@@ -72,17 +72,19 @@ PY
 # PX4_GZ_MODEL_DIR is already exported above.
 #PX4_GZ_MODEL_DIR="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models"
 
-if [ -d /workspace/custom_models/standard_vtol ]; then
-  echo "[INFO] Override PX4 standard_vtol with custom standard_vtol"
-  rm -rf "${PX4_GZ_MODEL_DIR}/standard_vtol"
-  cp -r /workspace/custom_models/standard_vtol "${PX4_GZ_MODEL_DIR}/standard_vtol"
-fi
+#if [ -d /workspace/custom_models/standard_vtol ]; then
+#  echo "[INFO] Override PX4 standard_vtol with custom standard_vtol"
+#  rm -rf "${PX4_GZ_MODEL_DIR}/standard_vtol"
+#  cp -r /workspace/custom_models/standard_vtol "${PX4_GZ_MODEL_DIR}/standard_vtol"
+#fi
 
 if [ -d /workspace/custom_models/mono_cam ]; then
   echo "[INFO] Override PX4 mono_cam with custom mono_cam"
   rm -rf "${PX4_GZ_MODEL_DIR}/mono_cam"
   cp -r /workspace/custom_models/mono_cam "${PX4_GZ_MODEL_DIR}/mono_cam"
 fi
+echo "[INFO] Patching standard_vtol with camera sensor..."
+python3 /workspace/px4/patches/patch_standard_vtol_camera.py
 
 echo "[INFO] Verifying custom camera model:"
 grep -n "vtol_camera_link\|vtol_camera_joint\|/vtol/camera\|sensor name=\"camera\"" "${PX4_GZ_MODEL_DIR}/standard_vtol/model.sdf" || true
@@ -93,33 +95,32 @@ echo "[INFO] PX4_GZ_WORLD=${PX4_GZ_WORLD}"
 echo "[INFO] PX4_MAKE_TARGET=${PX4_MAKE_TARGET}"
 echo "[INFO] GZ_SIM_RESOURCE_PATH=${GZ_SIM_RESOURCE_PATH}"
 
-# echo "[INFO] Starting Gazebo first..."
-# gz sim --verbose=4 -r -s /workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds/${PX4_GZ_WORLD}.sdf &
-# GZ_PID=$!
+echo "[INFO] Starting Gazebo first..."
+gz sim -s -r -v 4 "${PX4_GZ_WORLD_PATH}/${PX4_GZ_WORLD}.sdf" &
+GZ_PID=$!
 
-export MAV_BROADCAST=1
+echo "[INFO] Waiting for Gazebo world services..."
 
-#echo "[INFO] Waiting for Gazebo world services..."
-#for i in $(seq 1 90); do
-#  if gz service -l | grep -q "/world/${PX4_GZ_WORLD}/create" && \
-#    gz service -l | grep -q "/world/${PX4_GZ_WORLD}/state"; then
-#    echo "[INFO] Gazebo world services are ready."
-#    break
-#  fi
+for i in $(seq 1 90); do
+  if gz service -l | grep -q "/world/${PX4_GZ_WORLD}/create" && \
+    gz service -l | grep -q "/world/${PX4_GZ_WORLD}/state"; then
+    echo "[INFO] Gazebo world services are ready."
+    break
+  fi
 
-#  if [ "$i" -eq 90 ]; then
+  if [ "$i" -eq 90 ]; then
+    echo "[ERROR] Gazebo world services were not ready."
+    gz service -l || true
+    exit 1
+  fi
 
-#    echo "[ERROR] Gazebo world services were not ready."
-#    gz service -l || true
-#    exit 1
-#  fi
+  sleep 1
+done
 
-#  sleep 1
-#done
-
+export PX4_GZ_STANDALONE=1
 
 echo "[INFO] Starting PX4 SITL..."
-#export PX4_GZ_STANDALONE=1
+echo "[INFO] PX4_GZ_STANDALONE=${PX4_GZ_STANDALONE}"
 
 WINDOWS_HOST_IP=$(grep -oP '(?<=host\()\d+\.\d+\.\d+\.\d+(?=\))' /etc/resolv.conf)
 
