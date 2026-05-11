@@ -25,6 +25,8 @@ setup(
     entry_points={
         'console_scripts': [
            'offboard_controller = drone_control.offboard_controller:main',
+           'target_follow_controller = drone_control.target_follow_controller:main',
+           'fake_target_publisher = drone_control.fake_target_publisher:main',
          ],
     },
 )
