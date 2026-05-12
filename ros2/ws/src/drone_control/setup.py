@@ -27,6 +27,7 @@ setup(
            'offboard_controller = drone_control.offboard_controller:main',
            'target_follow_controller = drone_control.target_follow_controller:main',
            'fake_target_publisher = drone_control.fake_target_publisher:main',
+           'precision_mission_controller = drone_control.precision_mission_controller:main',
          ],
     },
 )
