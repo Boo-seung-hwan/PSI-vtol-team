@@ -21,7 +21,6 @@ export PX4_UXRCE_DDS_AG_IP=${PX4_UXRCE_DDS_AG_IP:-microxrce-agent}
 export PX4_GZ_WORLD=${PX4_GZ_WORLD:-default}
 export PX4_MAKE_TARGET=${PX4_MAKE_TARGET:-gz_standard_vtol}
 
-export PX4_GZ_WORLD=${PX4_GZ_WORLD:-default}
 export PX4_GZ_WORLD_PATH=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
 export PX4_GZ_MODELS=${PX4_GZ_MODELS:-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models}
 export PX4_GZ_MODEL_DIR=${PX4_GZ_MODEL_DIR:-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models}

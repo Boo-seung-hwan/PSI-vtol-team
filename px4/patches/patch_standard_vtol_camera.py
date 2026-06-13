@@ -23,14 +23,14 @@ camera_block = """
         </inertia>
       </inertial>
       <sensor name="camera" type="camera">
-        <pose>0 0 0 0 0 0</pose>
+        <pose>0 0 0 0 1.5708 0</pose>
         <topic>/vtol/camera</topic>
-        <update_rate>10</update_rate>
+        <update_rate>15</update_rate>
         <camera>
           <horizontal_fov>1.3962634</horizontal_fov>
           <image>
-            <width>1280</width>
-            <height>960</height>
+            <width>640</width>
+            <height>480</height>
             <format>R8G8B8</format>
           </image>
           <clip>
@@ -41,6 +41,26 @@ camera_block = """
         <always_on>1</always_on>
         <visualize>true</visualize>
         <gz_frame_id>vtol_camera_link</gz_frame_id>
+      </sensor>
+
+      <sensor name="depth_camera" type="depth_camera">
+        <pose>0 0 0 0 1.5708 0</pose>
+        <topic>/vtol/depth</topic>
+        <update_rate>15</update_rate>
+        <camera>
+          <horizontal_fov>1.3962634</horizontal_fov>
+          <image>
+            <width>640</width>
+            <height>480</height>
+            <format>R_FLOAT32</format>
+          </image>
+          <clip>
+            <near>0.02</near>
+            <far>300</far>
+          </clip>
+        </camera>
+        <always_on>1</always_on>
+        <visualize>false</visualize>
       </sensor>
     </link>
 

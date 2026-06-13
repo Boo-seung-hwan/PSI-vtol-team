@@ -34,7 +34,7 @@ services:
       - PX4_SIM_HOST_ADDR=host.docker.internal
       - PX4_UXRCE_DDS_PORT=8888
       - PX4_UXRCE_DDS_AG_IP=microxrce-agent
-      - PX4_GZ_WORLD=default
+      - PX4_GZ_WORLD=psi_vtol_world
       - PX4_MAKE_TARGET=gz_standard_vtol
       - PX4_GZ_MODELS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/models
       - PX4_GZ_WORLDS=/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds
@@ -69,6 +69,11 @@ services:
     depends_on:
       - px4-gazebo
     network_mode: "service:px4-gazebo"
+
+    privileged: true
+    devices:
+      - /dev/bus/usb:/dev/bus/usb
+
     environment:
       - DISPLAY=:0
       - WAYLAND_DISPLAY=wayland-0
@@ -79,6 +84,7 @@ services:
     volumes:
       - ./ros2:/workspace/ros2
       - ./models:/workspace/ml_models
+      - /dev:/dev
       - /mnt/wslg:/mnt/wslg
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /run/user/1000:/run/user/1000
