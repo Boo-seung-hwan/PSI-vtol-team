@@ -20,3 +20,9 @@ venv/
 # External repositories
 px4/PX4-Autopilot/
 ros2/ws/src/px4_msgs/
+
+# MuJoCo RL generated files
+mujoco_rl/runs/
+mujoco_rl/*.zip
+mujoco_rl/**/*.zip
+mujoco_rl/**/*.pyls
