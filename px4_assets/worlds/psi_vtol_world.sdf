@@ -1,0 +1,323 @@
+<?xml version="1.0"?>
+<sdf version="1.10">
+  <world name="psi_vtol_world">
+    <gravity>0 0 -9.80665</gravity>
+    <magnetic_field>2.75e-05 5.35e-06 -1.60e-05</magnetic_field>
+    <atmosphere type="adiabatic"/>
+
+    <!-- Reference origin for the navsat/GPS sensor. Update to the real test site. -->
+    <spherical_coordinates>
+      <surface_model>EARTH_WGS84</surface_model>
+      <latitude_deg>37.0</latitude_deg>
+      <longitude_deg>127.0</longitude_deg>
+      <elevation>0</elevation>
+      <heading_deg>0</heading_deg>
+    </spherical_coordinates>
+
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.001</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <scene>
+      <ambient>0.4 0.4 0.4 1</ambient>
+      <background>0.7 0.8 1.0 1</background>
+      <shadows>true</shadows>
+		
+      <sky>
+        <time>14</time>
+        <sunrise>6</sunrise>
+        <sunset>19</sunset>
+        <clouds>
+          <speed>1.2</speed>
+          <direction>0.8</direction>
+          <humidity>0.65</humidity>
+          <mean_size>0.7</mean_size>
+          <ambient>0.8 0.8 0.8 1</ambient>
+        </clouds>
+      </sky>
+
+      <fog>
+        <type>linear</type>
+        <color>0.75 0.78 0.82 1</color>
+        <start>80</start>
+        <end>600</end>
+        <density>0.2</density>
+      </fog>
+    </scene>
+
+    <light name="sun" type="directional">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 10 0 0 0</pose>
+      <diffuse>0.8 0.8 0.8 1</diffuse>
+      <specular>0.2 0.2 0.2 1</specular>
+      <attenuation>
+        <range>1000</range>
+        <constant>0.9</constant>
+        <linear>0.01</linear>
+        <quadratic>0.001</quadratic>
+      </attenuation>
+      <direction>-0.5 0.1 -0.9</direction>
+    </light>
+
+    <model name="ground_plane">
+      <static>true</static>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>200 200</size>
+            </plane>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>200 200</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.45 0.50 0.45 1</ambient>
+            <diffuse>0.45 0.50 0.45 1</diffuse>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+
+    <!-- Vertiport target pad: 3 m outer diameter, 2 m red safety area, 0.5 m center marker. -->
+    <model name="vertiport_pad">
+      <static>true</static>
+      <pose>8 0 0 0 0 0</pose>
+      <link name="link">
+        <!-- Outer 3 m black boundary, drawn as a thin annulus by stacking disks. -->
+        <visual name="outer_black_disk">
+          <pose>0 0 0.004 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>1.50</radius>
+              <length>0.008</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0 0 0 1</ambient>
+            <diffuse>0 0 0 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <visual name="outer_white_fill">
+          <pose>0 0 0.009 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>1.42</radius>
+              <length>0.008</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+
+        <!-- 2 m red safety boundary. -->
+        <visual name="safety_red_disk">
+          <pose>0 0 0.014 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>1.00</radius>
+              <length>0.008</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <visual name="safety_white_fill">
+          <pose>0 0 0.019 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.92</radius>
+              <length>0.008</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+
+        <!-- Large V mark. -->
+        <visual name="v_left_arm">
+          <pose>-0.29 0 0.026 0 0 0.29</pose>
+          <geometry>
+            <box>
+              <size>0.24 2.45 0.012</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 0 0 1</ambient>
+            <diffuse>0 0 0 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <visual name="v_right_arm">
+          <pose>0.29 0 0.026 0 0 -0.29</pose>
+          <geometry>
+            <box>
+              <size>0.24 2.45 0.012</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 0 0 1</ambient>
+            <diffuse>0 0 0 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+
+        <!-- Center 0.5 m marker, approximating the provided ArUco-like symbol. -->
+        <visual name="center_black_square">
+          <pose>0 0 0.040 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.50 0.50 0.012</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0 0 0 1</ambient>
+            <diffuse>0 0 0 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+
+        <!-- White marker blocks scaled from the reference image. -->
+        <visual name="center_white_upper_left_block">
+          <pose>-0.083380 0.083380 0.052 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.166761 0.166761 0.014</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <visual name="center_white_lower_left_stem">
+          <pose>-0.125000 -0.041620 0.053 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.083521 0.083239 0.014</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <visual name="center_white_upper_right_block">
+          <pose>0.124859 0.083380 0.054 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.083239 0.166761 0.014</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+        <visual name="center_white_bottom_block">
+          <pose>0.041620 -0.124859 0.055 0 0 0</pose>
+          <geometry>
+            <box>
+              <size>0.083239 0.083239 0.014</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+          </material>
+          <cast_shadows>false</cast_shadows>
+        </visual>
+      </link>
+    </model>
+    <!-- Core Gazebo Sim systems. -->
+    <plugin filename="gz-sim-physics-system" name="gz::sim::systems::Physics"/>
+    <plugin filename="gz-sim-user-commands-system" name="gz::sim::systems::UserCommands"/>
+    <plugin filename="gz-sim-scene-broadcaster-system" name="gz::sim::systems::SceneBroadcaster"/>
+
+    <!-- Sensor systems required by the sensors declared inside the VTOL model SDF. -->
+    <plugin filename="gz-sim-sensors-system" name="gz::sim::systems::Sensors">
+      <render_engine>ogre2</render_engine>
+    </plugin>
+    <plugin filename="gz-sim-imu-system" name="gz::sim::systems::Imu"/>
+    <plugin filename="gz-sim-air-pressure-system" name="gz::sim::systems::AirPressure"/>
+    <plugin filename="gz-sim-magnetometer-system" name="gz::sim::systems::Magnetometer"/>
+    <plugin filename="gz-sim-navsat-system" name="gz::sim::systems::NavSat"/>
+
+    <!--
+      Wind model.
+      Mean wind is approximately 3 m/s from +X toward -X direction, with slow
+      gust variation. Tune magnitude/direction after comparing with flight-test
+      conditions.
+    -->
+    <wind>
+      <linear_velocity>-3.0 0 0</linear_velocity>
+    </wind>
+    <plugin filename="gz-sim-wind-effects-system" name="gz::sim::systems::WindEffects">
+      <horizontal>
+        <magnitude>
+          <time_for_rise>10</time_for_rise>
+          <sin>
+            <amplitude_percent>0.20</amplitude_percent>
+            <period>30</period>
+          </sin>
+          <noise type="gaussian">
+            <mean>0</mean>
+            <stddev>0.15</stddev>
+          </noise>
+        </magnitude>
+        <direction>
+          <time_for_rise>10</time_for_rise>
+          <sin>
+            <amplitude>0.35</amplitude>
+            <period>45</period>
+          </sin>
+          <noise type="gaussian">
+            <mean>0</mean>
+            <stddev>0.05</stddev>
+          </noise>
+        </direction>
+      </horizontal>
+      <vertical>
+        <noise type="gaussian">
+          <mean>0</mean>
+          <stddev>0.05</stddev>
+        </noise>
+      </vertical>
+    </plugin>
+
+    <!-- Keep this world.sdf in the same directory as the model SDF, or replace this with a model:// URI. -->
+   <!-- <include>
+      <uri>reality_vtol_no_control_surfaces.sdf</uri>
+      <name>psi_reality_vtol</name>
+      <pose>0 0 0.25 0 0 0</pose>
+    </include> -->
+  </world>
+</sdf>
+
+
+
+
+
+
+
