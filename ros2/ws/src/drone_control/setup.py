@@ -18,22 +18,20 @@ setup(
     zip_safe=True,
     maintainer='qntmdghkss',
     maintainer_email='qntmdghkss@todo.todo',
-    description='TODO: Package description',
-    license='TODO: License declaration',
+    description='Drone control package',
+    license='TODO',
     extras_require={
-        'test': [
-            'pytest',
-        ],
+        'test': ['pytest'],
     },
     entry_points={
         'console_scripts': [
-           'precision_mission_controller = drone_control.precision_mission_controller:main',
-           'precision_landing_controller = drone_control.precision_landing_controller:main',
-           'precision_landing_test_input = drone_control.precision_landing_test_input:main',
-           'mission_manager = drone_control.supervision:main',
-           'setpoint_mux = drone_control.setpoint_mux:main',
-           'vertiport_tracking = drone_control.vertiport_tracking:main',
-           'generator_tracking = drone_control.generator_tracking:main',
-         ],
+            'mission_manager = drone_control.supervision:main',
+            'setpoint_mux = drone_control.setpoint_mux:main',
+            'generator_tracking = drone_control.generator_tracking:main',
+            'vertiport_tracking = drone_control.vertiport_tracking:main',
+            'precision_mission_controller = drone_control.precision_mission_controller:main',
+            'precision_landing_controller = drone_control.precision_landing_controller:main',
+            'precision_landing_test_input = drone_control.precision_landing_test_input:main',
+        ],
     },
 )

@@ -42,6 +42,7 @@ services:
     volumes:
       - ./px4:/workspace/px4
       - ./models:/workspace/custom_models
+      - ./px4_assets:/workspace/px4_assets
       - /mnt/wslg:/mnt/wslg
       - /tmp/.X11-unix:/tmp/.X11-unix
       - /run/user/1000:/run/user/1000

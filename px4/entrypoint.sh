@@ -36,11 +36,27 @@ export GZ_IP=$(hostname -I | awk '{print $1}')
 echo "[INFO] GZ_PARTITI=${GZ_PARTITION}"
 echo "[INFO] GZ_RELAY=${GZ_RELAY}"
 echo "[INFO] GZ_IP=${GZ_IP}"
-echo "[INFO] Applying custom Gazebo models..."
+
+echo "[INFO] Applying custom Gazebo worlds..."
+PX4_GZ_WORLD_DIR="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds"
+mkdir -p "${PX4_GZ_WORLD_DIR}"
+
+if compgen -G "/workspace/px4_assets/worlds/*.sdf" > /dev/null; then
+  cp -v /workspace/px4_assets/worlds/*.sdf "${PX4_GZ_WORLD_DIR}/"
+else
+  echo "[WARN] No custom Gazebo world files found in /workspace/px4_assets/worlds"
+fi
 
 echo "[INFO] Ensuring Gazebo world has required system plugins..."
 
-WORLD_FILE="/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds/${PX4_GZ_WORLD}.sdf"
+WORLD_FILE="${PX4_GZ_WORLD_DIR}/${PX4_GZ_WORLD}.sdf"
+
+if [ ! -f "${WORLD_FILE}" ]; then
+  echo "[ERROR] Gazebo world file not found: ${WORLD_FILE}"
+  echo "[ERROR] Available worlds:"
+  ls -l "${PX4_GZ_WORLD_DIR}" || true
+  exit 1
+fi
 
 python3 - <<PY
 from pathlib import Path
