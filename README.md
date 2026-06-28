@@ -422,6 +422,89 @@ ros2 run drone_vision yolo_detector --ros-args \
   -p target_class_id:=0
 ```
 
+
+### Vision model weight files
+
+YOLO / PyTorch model weight files are not tracked by this GitHub repository.
+
+Do not commit files such as:
+
+```text
+*.pt
+*.pth
+*.onnx
+*.engine
+```
+
+Required model files should be downloaded separately from:
+
+```text
+Microsoft Teams > 미션팀 자료
+```
+
+After downloading the files, place them in the following directory on the host WSL side:
+
+```text
+~/drone_stack/ros2/ws/src/drone_vision/models/
+```
+
+The same directory is visible inside the `ros2-vision` container as:
+
+```text
+/workspace/ros2/ws/src/drone_vision/models/
+```
+
+Required files:
+
+```text
+ros2/ws/src/drone_vision/models/best.pt
+ros2/ws/src/drone_vision/models/aruco_best.pt
+```
+
+Optional file:
+
+```text
+ros2/ws/src/drone_vision/models/yolov8n.pt
+```
+
+`best.pt` is the default model path used by `yolo_detector`.
+
+`aruco_best.pt` is used when running the detector manually with the ArUco / marker detection model.
+
+Example check from the host WSL terminal:
+
+```bash
+cd ~/drone_stack
+
+ls -lh ros2/ws/src/drone_vision/models/
+```
+
+Expected example:
+
+```text
+best.pt
+aruco_best.pt
+```
+
+Example check from inside the `ros2-vision` container:
+
+```bash
+docker exec -it ros2-vision bash
+
+ls -lh /workspace/ros2/ws/src/drone_vision/models/
+```
+
+If the `.pt` files are missing, the vision launch may fail when `yolo_detector` tries to load the model.
+
+Do not use `git add .` to stage model weights accidentally.
+
+Check whether model files are ignored by Git:
+
+```bash
+git status --ignored -s
+git check-ignore -v ros2/ws/src/drone_vision/models/*.pt
+```
+
 ---
 
 ## 11. Common Troubleshooting
