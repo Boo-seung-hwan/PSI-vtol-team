@@ -413,6 +413,21 @@ target_camera_to_ned
 /target/ned
 ```
 
+Current mission target model:
+
+```text
+aruco_best.pt
+```
+
+Current class mapping:
+
+```text
+aruco_best.pt
+class 0: yolo-marker
+```
+
+The mission vision pipeline should use `aruco_best.pt`, not `best.pt`.
+
 Run YOLO detector manually:
 
 ```bash
@@ -422,6 +437,31 @@ ros2 run drone_vision yolo_detector --ros-args \
   -p target_class_id:=0
 ```
 
+Check YOLO detector status:
+
+```bash
+ros2 topic echo /vision/yolo_status
+```
+
+Check bounding-box output:
+
+```bash
+ros2 topic echo /vision/yolo_bbox
+```
+
+Check annotated image topic:
+
+```bash
+ros2 topic list | grep yolo
+```
+
+Expected related topics:
+
+```text
+/vision/yolo_bbox
+/vision/yolo_status
+/vision/yolo_annotated_image
+```
 
 ### Vision model weight files
 
@@ -434,6 +474,7 @@ Do not commit files such as:
 *.pth
 *.onnx
 *.engine
+*.tflite
 ```
 
 Required model files should be downloaded separately from:
@@ -454,22 +495,40 @@ The same directory is visible inside the `ros2-vision` container as:
 /workspace/ros2/ws/src/drone_vision/models/
 ```
 
-Required files:
+Required mission model:
 
 ```text
-ros2/ws/src/drone_vision/models/best.pt
 ros2/ws/src/drone_vision/models/aruco_best.pt
 ```
 
-Optional file:
+`aruco_best.pt` is the mission marker detector.
+
+Current confirmed class mapping:
 
 ```text
+{0: 'yolo-marker'}
+```
+
+Optional / test models:
+
+```text
+ros2/ws/src/drone_vision/models/best.pt
 ros2/ws/src/drone_vision/models/yolov8n.pt
 ```
 
-`best.pt` is the default model path used by `yolo_detector`.
+Current `best.pt` is a COCO pretrained model, not the mission marker model.
 
-`aruco_best.pt` is used when running the detector manually with the ArUco / marker detection model.
+Current confirmed `best.pt` class mapping begins with:
+
+```text
+{0: 'person', 1: 'bicycle', 2: 'car', ...}
+```
+
+Therefore, with `target_class_id=0`, `best.pt` detects `person`.
+
+Do not use `best.pt` as the mission marker detector unless intentionally testing person detection.
+
+### Verify model files
 
 Example check from the host WSL terminal:
 
@@ -479,10 +538,9 @@ cd ~/drone_stack
 ls -lh ros2/ws/src/drone_vision/models/
 ```
 
-Expected example:
+Expected mission file:
 
 ```text
-best.pt
 aruco_best.pt
 ```
 
@@ -494,6 +552,29 @@ docker exec -it ros2-vision bash
 ls -lh /workspace/ros2/ws/src/drone_vision/models/
 ```
 
+Verify model class names:
+
+```bash
+python3 - <<'PY'
+from ultralytics import YOLO
+
+for path in [
+    "/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt",
+    "/workspace/ros2/ws/src/drone_vision/models/best.pt",
+]:
+    print("\nMODEL:", path)
+    model = YOLO(path)
+    print(model.names)
+PY
+```
+
+Expected mission model output:
+
+```text
+MODEL: /workspace/ros2/ws/src/drone_vision/models/aruco_best.pt
+{0: 'yolo-marker'}
+```
+
 If the `.pt` files are missing, the vision launch may fail when `yolo_detector` tries to load the model.
 
 Do not use `git add .` to stage model weights accidentally.
@@ -503,6 +584,17 @@ Check whether model files are ignored by Git:
 ```bash
 git status --ignored -s
 git check-ignore -v ros2/ws/src/drone_vision/models/*.pt
+```
+
+If `.pt` files are not ignored, add this to `.gitignore`:
+
+```gitignore
+# ML model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
 ```
 
 ---
@@ -708,9 +800,11 @@ Stage only intended files:
 
 ```bash
 git add README.md
+git add .gitignore
 git add ros2/ws/src/my_first_pkg/COLCON_IGNORE
 git add ros2/ws/src/drone_control/setup.py
 git add ros2/ws/src/drone_vision/setup.py
+git add ros2/ws/src/drone_vision/drone_vision/yolo_detector.py
 git add px4/entrypoint.sh
 git add compose.yaml
 git add px4_assets/worlds/psi_vtol_world.sdf
@@ -781,3 +875,7 @@ tensorboard --logdir ./runs --host 0.0.0.0 --port 6006
 - Store custom PX4 worlds in `px4_assets/worlds/`.
 - Use `./start.sh` instead of `docker compose up`.
 - Treat `px4/PX4-Autopilot/` as an external dependency.
+- Do not commit `.pt` model weight files to GitHub.
+- Download `aruco_best.pt` from Microsoft Teams > 미션팀 자료 and place it in `ros2/ws/src/drone_vision/models/`.
+- Use `aruco_best.pt` as the mission marker detector. Current class 0 is `yolo-marker`.
+- Treat `best.pt` as an optional COCO/person detection test model, not as the mission marker model.

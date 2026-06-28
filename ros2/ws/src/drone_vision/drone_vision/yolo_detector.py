@@ -20,7 +20,7 @@ class YoloDetector(Node):
         super().__init__("yolo_detector")
 
         self.declare_parameter("image_topic", "/vtol/camera")
-        self.declare_parameter("model_path", "/workspace/ros2/ws/src/drone_vision/models/best.pt")
+        self.declare_parameter("model_path", "/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt")
         self.declare_parameter("confidence_threshold", 0.5)
         self.declare_parameter("target_class_id", 0)
 
