@@ -157,10 +157,23 @@ ros2-vision       Up
 
 Use a manual UDP link in QGroundControl:
 
+<p align="center">
+  <img src="docs/images/qgc_udp_link.png" alt="QGroundControl UDP link setup" width="700">
+</p>
+
 ```text
 Type: UDP
 Listening Port: 14550
-Server Address: 127.0.0.1:18570    <--This is the example of Server Address, This will be different according to user, For my case server address is 179.0.0.21
+Server Address: 127.0.0.1:18570
+```
+
+`127.0.0.1:18570` is the default example for this Docker/WSL setup.
+
+The server address can be different depending on the user's network, WSL, Docker, and QGroundControl environment.  
+For example, in one tested setup, the server address was:
+
+```text
+179.0.0.21:18570
 ```
 
 Useful PX4 status check:
