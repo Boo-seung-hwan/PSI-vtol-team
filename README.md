@@ -160,7 +160,7 @@ Use a manual UDP link in QGroundControl:
 ```text
 Type: UDP
 Listening Port: 14550
-Server Address: 127.0.0.1:18570
+Server Address: 127.0.0.1:18570    <--This is the example of Server Address, This will be different according to user, For my case server address is 179.0.0.21
 ```
 
 Useful PX4 status check:
