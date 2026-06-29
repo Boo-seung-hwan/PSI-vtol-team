@@ -26,3 +26,13 @@ mujoco_rl/runs/
 mujoco_rl/*.zip
 mujoco_rl/**/*.zip
 mujoco_rl/**/*.pyls
+
+# ML model weights
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
+
+# Local vision model directory
+ros2/ws/src/drone_vision/models/

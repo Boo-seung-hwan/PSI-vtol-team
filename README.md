@@ -10,7 +10,7 @@ orange-fix
 
 ---
 
-## 1. Repository Structure
+## 1. What this repository contains
 
 ```text
 drone_stack/
@@ -21,98 +21,174 @@ drone_stack/
 │   ├── entrypoint.sh
 │   └── PX4-Autopilot/        # external dependency, not tracked by this repo
 ├── px4_assets/
-│   └── worlds/               # custom Gazebo world files
+│   └── worlds/               # custom Gazebo worlds
 ├── models/                   # custom Gazebo models
 ├── ros2/
 │   ├── Dockerfile
 │   ├── entrypoint.sh
-│   └── ws/
-│       └── src/
-│           ├── drone_control/
-│           ├── drone_vision/
-│           ├── drone_interfaces/
-│           ├── drone_bringup/
-│           ├── px4_msgs/
-│           └── my_first_pkg/
+│   └── ws/src/
+│       ├── drone_control/
+│       ├── drone_vision/
+│       ├── drone_interfaces/
+│       ├── drone_bringup/
+│       └── px4_msgs/
 └── mujoco_rl/
 ```
 
 Important rule:
 
-PX4-Autopilot is treated as an external dependency.
-
-Do not store project-specific files only inside:
-
 ```text
-px4/PX4-Autopilot/
+px4/PX4-Autopilot/ is treated as an external dependency.
+Do not store project-specific files only inside px4/PX4-Autopilot/.
 ```
 
-Project-specific Gazebo worlds, models, params, and patches should be stored in this repository.
-
-Examples:
+Project-specific files should be stored in this repository, for example:
 
 ```text
 px4_assets/worlds/
 models/
 px4/patches/
+ros2/ws/src/
 ```
 
 ---
 
-## 2. First-Time Setup on a New Desktop
+## 2. Required PX4 and ROS2 message versions
 
-Clone the repository:
+The current ROS2 mission code expects PX4 1.15-style unversioned topics:
 
-```bash
-git clone -b orange-fix https://github.com/Boo-seung-hwan/PSI-vtol-team.git drone_stack
-cd drone_stack
+```text
+/fmu/out/vehicle_status
+/fmu/out/vehicle_local_position
+/fmu/in/trajectory_setpoint
+/fmu/in/offboard_control_mode
 ```
 
-Build Docker images:
+Do not use PX4 `main` unless the ROS2 topic names are updated. PX4 `main` may produce versioned topics such as:
+
+```text
+/fmu/out/vehicle_status_v4
+/fmu/out/vehicle_local_position_v1
+```
+
+Recommended PX4 version:
+
+```text
+PX4 branch: release/1.15
+PX4 commit: 85df8c2281
+Expected describe: v1.15.4-4-g85df8c2281-dirty
+```
+
+Set PX4 to the expected version:
 
 ```bash
+cd ~/drone_stack/px4/PX4-Autopilot
+
+git fetch origin
+git checkout -B release/1.15 origin/release/1.15
+git checkout 85df8c2281
+
+git rev-parse --short HEAD
+git describe --tags --always --dirty
+```
+
+Set `px4_msgs` to the matching release:
+
+```bash
+cd ~/drone_stack/ros2/ws/src/px4_msgs
+
+git fetch origin --no-recurse-submodules
+git checkout -B release/1.15 origin/release/1.15
+```
+
+If permission errors occur:
+
+```bash
+cd ~/drone_stack
+
+sudo chown -R $(id -u):$(id -g) px4/PX4-Autopilot
+sudo chown -R $(id -u):$(id -g) ros2/ws/src/px4_msgs
+```
+
+---
+
+## 3. First-time startup
+
+From the host WSL terminal:
+
+```bash
+cd ~/drone_stack
+
 docker compose build
+./start.sh
 ```
 
-Start the full stack:
+Use:
 
 ```bash
 ./start.sh
 ```
 
-Use `./start.sh` instead of `docker compose up`.
-
-`start.sh` automatically sets `QGC_HOST_IP`, which is needed for QGroundControl communication.
-
----
-
-## 3. Main Containers
-
-Check container status:
+instead of:
 
 ```bash
-docker compose ps -a
+docker compose up
 ```
 
-Expected containers:
+`start.sh` sets the host IP required for QGroundControl communication.
+
+Expected running containers:
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+Expected:
 
 ```text
-microxrce-agent   Up
 px4-gazebo        Up
+microxrce-agent   Up
 ros2-vision       Up
 ```
 
-Container roles:
+---
+
+## 4. QGroundControl connection
+
+Use a manual UDP link in QGroundControl:
 
 ```text
-microxrce-agent   PX4 ↔ ROS2 DDS bridge
-px4-gazebo        PX4 SITL + Gazebo
-ros2-vision       ROS2 mission, control, and vision nodes
+Type: UDP
+Listening Port: 14550
+Server Address: 127.0.0.1:18570
+```
+
+Useful PX4 status check:
+
+```bash
+docker exec -it ros2-vision bash -lc '
+cd /workspace/ros2/ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+ros2 topic echo /fmu/out/vehicle_status --once
+'
+```
+
+Useful fields:
+
+```text
+arming_state
+nav_state
+failsafe
+gcs_connection_lost
+pre_flight_checks_pass
+is_vtol
 ```
 
 ---
 
-## 4. ROS2 Workspace Build
+## 5. Build the ROS2 workspace
 
 Enter the ROS2 container:
 
@@ -120,7 +196,7 @@ Enter the ROS2 container:
 docker exec -it ros2-vision bash
 ```
 
-Build the ROS2 workspace:
+Build:
 
 ```bash
 cd /workspace/ros2/ws
@@ -129,32 +205,20 @@ source /opt/ros/humble/setup.bash
 
 touch src/my_first_pkg/COLCON_IGNORE
 
-rm -rf build install log
-
 colcon build
 
 source install/setup.bash
 ```
 
-Do not use:
-
-```bash
-colcon build --symlink-install
-```
-
-In the current container environment, `--symlink-install` may fail with:
+Do not use `--symlink-install` in the current container environment if it fails with:
 
 ```text
 error: option --editable not recognized
 ```
 
-Use this instead:
+Use regular `colcon build`.
 
-```bash
-colcon build
-```
-
-Check package detection:
+Check packages:
 
 ```bash
 ros2 pkg list | grep drone
@@ -163,35 +227,15 @@ ros2 pkg list | grep drone
 Expected packages include:
 
 ```text
-drone_bringup
 drone_control
-drone_interfaces
 drone_vision
-```
-
-Check executable registration:
-
-```bash
-ros2 pkg executables drone_control
-ros2 pkg executables drone_vision
-```
-
-Expected examples:
-
-```text
-drone_control mission_manager
-drone_control setpoint_mux
-drone_control generator_tracking
-drone_control vertiport_tracking
-
-drone_vision yolo_detector
-drone_vision target_depth_estimator
-drone_vision target_camera_to_ned
+drone_interfaces
+drone_bringup
 ```
 
 ---
 
-## 5. Launch Mission System
+## 6. Launch the mission system
 
 Inside the `ros2-vision` container:
 
@@ -206,7 +250,7 @@ export PYTHONOPTIMIZE=1
 ros2 launch drone_control mission_system.launch.py
 ```
 
-This launches:
+This launch starts:
 
 ```text
 setpoint_mux
@@ -218,254 +262,155 @@ target_depth_estimator
 target_camera_to_ned
 ```
 
----
-
-## 6. PX4 / Gazebo Custom Worlds
-
-Custom Gazebo world files should be stored in:
-
-```text
-px4_assets/worlds/
-```
-
-Example:
-
-```text
-px4_assets/worlds/psi_vtol_world.sdf
-```
-
-These files should be copied into PX4-Autopilot inside the `px4-gazebo` container before Gazebo starts.
-
-Expected destination inside the container:
-
-```text
-/workspace/px4/PX4-Autopilot/Tools/simulation/gz/worlds/
-```
-
-Do not manually add custom world files only to:
-
-```text
-px4/PX4-Autopilot/Tools/simulation/gz/worlds/
-```
-
-because `px4/PX4-Autopilot/` is not tracked by this repository.
-
-If a custom world is used, check that `compose.yaml` sets the correct world name:
-
-```yaml
-PX4_GZ_WORLD=psi_vtol_world
-```
-
-If the default world is used:
-
-```yaml
-PX4_GZ_WORLD=default
-```
+Do not run a second `yolo_detector` manually while `mission_system.launch.py` is already running, unless doing a standalone detector test.
 
 ---
 
-## 7. PX4 + Gazebo Startup
+## 7. Camera bridge
 
-Start from the host WSL terminal:
-
-```bash
-cd ~/drone_stack
-./start.sh
-```
-
-Check logs:
+Gazebo camera topics are not automatically ROS2 topics. Start the ROS-Gazebo bridge in a separate terminal:
 
 ```bash
-docker logs px4-gazebo --tail=200
-docker logs ros2-vision --tail=200
-docker logs microxrce-agent --tail=200
+docker exec -it ros2-vision bash
+
+cd /workspace/ros2/ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+ros2 run ros_gz_bridge parameter_bridge \
+  /vtol/camera@sensor_msgs/msg/Image@gz.msgs.Image \
+  /vtol/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo \
+  /vtol/depth@sensor_msgs/msg/Image@gz.msgs.Image
 ```
 
-If `px4-gazebo` exits immediately, inspect:
+Check Gazebo-side topics:
 
 ```bash
-docker compose ps -a
-docker logs px4-gazebo --tail=200
+docker exec -it px4-gazebo bash -lc '
+gz topic -l | grep -E "vtol|camera|depth"
+'
 ```
 
-Common world-file error:
-
-```text
-FileNotFoundError:
-.../Tools/simulation/gz/worlds/psi_vtol_world.sdf
-```
-
-This means the custom world file was not copied or is missing from:
-
-```text
-px4_assets/worlds/
-```
-
-Check:
-
-```bash
-ls px4_assets/worlds/
-```
-
-Expected example:
-
-```text
-psi_vtol_world.sdf
-```
-
-Then restart:
-
-```bash
-docker compose down --remove-orphans
-./start.sh
-```
-
----
-
-## 8. QGroundControl
-
-`start.sh` sets:
-
-```text
-QGC_HOST_IP
-```
-
-Do not run `docker compose up` directly unless `QGC_HOST_IP` is manually exported.
-
-Recommended:
-
-```bash
-./start.sh
-```
-
-Manual alternative:
-
-```bash
-export QGC_HOST_IP=$(ip route | grep default | awk '{print $3}')
-docker compose up
-```
-
----
-
-## 9. Mission System Architecture
-
-High-level flow:
-
-```text
-mission_manager
-      ↓
-/mission/state
-      ↓
-generator_tracking / vertiport_tracking
-      ↓
-/generator_tracking/trajectory_setpoint
-/vertiport_tracking/trajectory_setpoint
-      ↓
-setpoint_mux
-      ↓
-/fmu/in/trajectory_setpoint
-```
-
-Important topics:
-
-```text
-/mission/state
-/mission/status
-/setpoint_mux/source
-/setpoint_mux/status
-
-/generator_tracking/trajectory_setpoint
-/generator_tracking/status
-
-/vertiport_tracking/trajectory_setpoint
-/vertiport_tracking/status
-
-/fmu/in/trajectory_setpoint
-/fmu/in/offboard_control_mode
-
-/fmu/out/vehicle_local_position
-/fmu/out/vehicle_status
-
-/vision/yolo_bbox
-/vision/target_camera_xyz
-/target/ned
-```
-
----
-
-## 10. Vision Pipeline
-
-Pipeline:
+Expected:
 
 ```text
 /vtol/camera
-      ↓
-yolo_detector
-      ↓
-/vision/yolo_bbox
-      ↓
-target_depth_estimator
-      ↓
-/vision/target_camera_xyz
-      ↓
-target_camera_to_ned
-      ↓
-/target/ned
+/vtol/camera_info
+/vtol/depth
+/vtol/depth/points
 ```
 
-Current mission target model:
-
-```text
-aruco_best.pt
-```
-
-Current class mapping:
-
-```text
-aruco_best.pt
-class 0: yolo-marker
-```
-
-The mission vision pipeline should use `aruco_best.pt`, not `best.pt`.
-
-Run YOLO detector manually:
+Check ROS2 camera rate:
 
 ```bash
-ros2 run drone_vision yolo_detector --ros-args \
-  -p model_path:=/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt \
-  -p confidence_threshold:=0.25 \
-  -p target_class_id:=0
+ros2 topic hz /vtol/camera
 ```
 
-Check YOLO detector status:
+Expected rate is usually about:
+
+```text
+8-10 Hz
+```
+
+---
+
+## 8. Mission test sequence
+
+Use three terminals.
+
+### Terminal 1: camera bridge
 
 ```bash
-ros2 topic echo /vision/yolo_status
+docker exec -it ros2-vision bash
+
+cd /workspace/ros2/ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+ros2 run ros_gz_bridge parameter_bridge \
+  /vtol/camera@sensor_msgs/msg/Image@gz.msgs.Image \
+  /vtol/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo \
+  /vtol/depth@sensor_msgs/msg/Image@gz.msgs.Image
 ```
 
-Check bounding-box output:
+### Terminal 2: mission system
+
+```bash
+docker exec -it ros2-vision bash
+
+cd /workspace/ros2/ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+export PYTHONOPTIMIZE=1
+
+ros2 launch drone_control mission_system.launch.py
+```
+
+### Terminal 3: command and monitor
+
+```bash
+docker exec -it ros2-vision bash
+
+cd /workspace/ros2/ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+```
+
+Start the mission:
+
+```bash
+ros2 topic pub --once /mission/start std_msgs/msg/String "{data: 'START'}"
+```
+
+Force rescue-done transition for mission-state testing:
+
+```bash
+ros2 topic pub --once /mission/rescue_status std_msgs/msg/String "{data: 'RESCUE_DONE'}"
+```
+
+Monitor mission state:
+
+```bash
+ros2 topic echo /mission/status
+ros2 topic echo /setpoint_mux/status
+ros2 topic echo /generator_tracking/status
+```
+
+Monitor PX4 setpoints:
+
+```bash
+ros2 topic echo /fmu/in/offboard_control_mode --once
+ros2 topic echo /fmu/in/trajectory_setpoint --once
+```
+
+Monitor vision:
 
 ```bash
 ros2 topic echo /vision/yolo_bbox
+ros2 topic echo /vision/target_camera_xyz
+ros2 topic echo /target/ned
 ```
 
-Check annotated image topic:
+Open image viewer if GUI support is available:
 
 ```bash
-ros2 topic list | grep yolo
+ros2 run rqt_image_view rqt_image_view
 ```
 
-Expected related topics:
+Useful image topics:
 
 ```text
-/vision/yolo_bbox
-/vision/yolo_status
+/vtol/camera
 /vision/yolo_annotated_image
+/vtol/depth
 ```
 
-### Vision model weight files
+---
 
-YOLO / PyTorch model weight files are not tracked by this GitHub repository.
+## 9. Vision model files
+
+YOLO model files are not tracked by Git.
 
 Do not commit files such as:
 
@@ -477,258 +422,273 @@ Do not commit files such as:
 *.tflite
 ```
 
-Required model files should be downloaded separately from:
-
-```text
-Microsoft Teams > 미션팀 자료
-```
-
-After downloading the files, place them in the following directory on the host WSL side:
-
-```text
-~/drone_stack/ros2/ws/src/drone_vision/models/
-```
-
-The same directory is visible inside the `ros2-vision` container as:
-
-```text
-/workspace/ros2/ws/src/drone_vision/models/
-```
-
 Required mission model:
 
 ```text
 ros2/ws/src/drone_vision/models/aruco_best.pt
 ```
 
-`aruco_best.pt` is the mission marker detector.
-
-Current confirmed class mapping:
+Inside the container, the same path is:
 
 ```text
-{0: 'yolo-marker'}
+/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt
 ```
 
-Optional / test models:
-
-```text
-ros2/ws/src/drone_vision/models/best.pt
-ros2/ws/src/drone_vision/models/yolov8n.pt
-```
-
-Current `best.pt` is a COCO pretrained model, not the mission marker model.
-
-Current confirmed `best.pt` class mapping begins with:
-
-```text
-{0: 'person', 1: 'bicycle', 2: 'car', ...}
-```
-
-Therefore, with `target_class_id=0`, `best.pt` detects `person`.
-
-Do not use `best.pt` as the mission marker detector unless intentionally testing person detection.
-
-### Verify model files
-
-Example check from the host WSL terminal:
-
-```bash
-cd ~/drone_stack
-
-ls -lh ros2/ws/src/drone_vision/models/
-```
-
-Expected mission file:
+Current mission model:
 
 ```text
 aruco_best.pt
+class 0: yolo-marker
 ```
 
-Example check from inside the `ros2-vision` container:
+Standalone YOLO test:
 
 ```bash
-docker exec -it ros2-vision bash
+ros2 run drone_vision yolo_detector --ros-args \
+  -p model_path:=/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt \
+  -p confidence_threshold:=0.25 \
+  -p target_class_id:=0
+```
 
+Check model files:
+
+```bash
 ls -lh /workspace/ros2/ws/src/drone_vision/models/
 ```
 
-Verify model class names:
+Check YOLO class names:
 
 ```bash
 python3 - <<'PY'
 from ultralytics import YOLO
 
-for path in [
-    "/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt",
-    "/workspace/ros2/ws/src/drone_vision/models/best.pt",
-]:
-    print("\nMODEL:", path)
-    model = YOLO(path)
-    print(model.names)
+model = YOLO("/workspace/ros2/ws/src/drone_vision/models/aruco_best.pt")
+print(model.names)
 PY
-```
-
-Expected mission model output:
-
-```text
-MODEL: /workspace/ros2/ws/src/drone_vision/models/aruco_best.pt
-{0: 'yolo-marker'}
-```
-
-If the `.pt` files are missing, the vision launch may fail when `yolo_detector` tries to load the model.
-
-Do not use `git add .` to stage model weights accidentally.
-
-Check whether model files are ignored by Git:
-
-```bash
-git status --ignored -s
-git check-ignore -v ros2/ws/src/drone_vision/models/*.pt
-```
-
-If `.pt` files are not ignored, add this to `.gitignore`:
-
-```gitignore
-# ML model weights
-*.pt
-*.pth
-*.onnx
-*.engine
-*.tflite
-```
-
----
-
-## 11. Common Troubleshooting
-
-### Package not found
-
-Example:
-
-```text
-Package 'drone_vision' not found
-Package 'drone_control' not found
-```
-
-Fix:
-
-```bash
-cd /workspace/ros2/ws
-
-source /opt/ros/humble/setup.bash
-
-touch src/my_first_pkg/COLCON_IGNORE
-
-rm -rf build install log
-
-colcon build
-
-source install/setup.bash
-```
-
-Then check:
-
-```bash
-ros2 pkg list | grep drone
-```
-
----
-
-### `mission_system.launch.py` not found
-
-Example:
-
-```text
-file 'mission_system.launch.py' was not found in the share directory of package 'drone_control'
-```
-
-Fix:
-
-```bash
-cd /workspace/ros2/ws
-
-source /opt/ros/humble/setup.bash
-
-rm -rf build install log
-
-colcon build
-
-source install/setup.bash
-
-ls install/drone_control/share/drone_control/launch
 ```
 
 Expected:
 
 ```text
-mission_system.launch.py
+{0: 'yolo-marker'}
 ```
 
 ---
 
-### `error: option --editable not recognized`
+## 10. Interpreting YOLO output
 
-If this happens during:
-
-```bash
-colcon build --symlink-install
-```
-
-use:
-
-```bash
-colcon build
-```
-
-instead.
-
----
-
-### `my_first_pkg` build failure
-
-`my_first_pkg` is not required for the current drone stack.
-
-Ignore it:
-
-```bash
-touch /workspace/ros2/ws/src/my_first_pkg/COLCON_IGNORE
-```
-
-This file should be committed to Git.
-
----
-
-### PX4 Gazebo world missing
-
-If PX4 exits with:
+Example invalid detection:
 
 ```text
-FileNotFoundError:
-.../Tools/simulation/gz/worlds/psi_vtol_world.sdf
+[0.0, -1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 640.0, 480.0]
 ```
 
-check:
-
-```bash
-ls px4_assets/worlds/
-```
-
-Expected example:
+Meaning:
 
 ```text
-psi_vtol_world.sdf
+valid = 0.0
+class_id = -1.0
+confidence = 0.0
+image size = 640 x 480
 ```
 
-Then restart:
+This means:
+
+```text
+Camera input is working.
+YOLO node is running.
+The target is not detected.
+```
+
+When detection is valid:
+
+```text
+valid = 1.0
+```
+
+Only then should downstream topics publish meaningful data:
+
+```text
+/vision/target_camera_xyz
+/target/ned
+```
+
+---
+
+## 11. Troubleshooting
+
+### Problem: `/fmu` topics do not appear
+
+Check containers:
 
 ```bash
-docker compose down --remove-orphans
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+```
+
+Check MicroXRCEAgent logs:
+
+```bash
+docker logs --tail 100 microxrce-agent
+```
+
+If the log only shows:
+
+```text
+running... port: 8888
+```
+
+and does not show `create_topic` or `create_datawriter`, PX4 is probably not connecting to the agent.
+
+Check the patched `rcS` line:
+
+```bash
+docker exec -it px4-gazebo bash -lc '
+grep -n "uxrce_dds_client start" /workspace/px4/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/rcS
+'
+```
+
+Correct:
+
+```text
+uxrce_dds_client start -t udp -h microxrce-agent -p $uxrce_dds_port $uxrce_dds_ns
+```
+
+Wrong:
+
+```text
+uxrce_dds_client start -t udp -h 127.0.0.1 -p $uxrce_dds_port $uxrce_dds_ns
+```
+
+Why this matters:
+
+```text
+127.0.0.1 inside px4-gazebo = px4-gazebo container itself
+microxrce-agent = the MicroXRCEAgent container
+```
+
+The fix is handled in:
+
+```text
+px4/entrypoint.sh
+```
+
+After editing `px4/entrypoint.sh`, restart:
+
+```bash
+cd ~/drone_stack
+
+docker compose down
+rm -rf px4/PX4-Autopilot/build/px4_sitl_default
+docker compose build px4-gazebo
 ./start.sh
 ```
 
 ---
 
-### Docker namespace error
+### Problem: PX4 SITL build fails with NuttX tag error
+
+Example error:
+
+```text
+IndexError: list index out of range
+nuttx_git_tag = re.findall(...)[-1]
+```
+
+Fix:
+
+```bash
+cd ~/drone_stack/px4/PX4-Autopilot
+
+git -C platforms/nuttx/NuttX/nuttx fetch --tags --force origin
+git -C platforms/nuttx/NuttX/nuttx tag | grep '^nuttx-' | tail
+```
+
+If needed:
+
+```bash
+git -C platforms/nuttx/NuttX/nuttx fetch --unshallow --tags origin
+```
+
+Then rebuild:
+
+```bash
+cd ~/drone_stack
+
+docker compose down
+rm -rf px4/PX4-Autopilot/build/px4_sitl_default
+docker compose build px4-gazebo
+./start.sh
+```
+
+---
+
+### Problem: ROS2 topics are versioned
+
+Example:
+
+```text
+/fmu/out/vehicle_status_v4
+/fmu/out/vehicle_local_position_v1
+```
+
+This usually means PX4 and `px4_msgs` are on `main`.
+
+Fix by using PX4 `release/1.15` and `px4_msgs release/1.15`.
+
+---
+
+### Problem: Gazebo camera exists but ROS2 vision topics do not
+
+Start the ROS-Gazebo bridge:
+
+```bash
+ros2 run ros_gz_bridge parameter_bridge \
+  /vtol/camera@sensor_msgs/msg/Image@gz.msgs.Image \
+  /vtol/camera_info@sensor_msgs/msg/CameraInfo@gz.msgs.CameraInfo \
+  /vtol/depth@sensor_msgs/msg/Image@gz.msgs.Image
+```
+
+Then launch the mission system:
+
+```bash
+ros2 launch drone_control mission_system.launch.py
+```
+
+Check topics:
+
+```bash
+ros2 topic list | grep -E "vtol|vision|target"
+```
+
+Expected:
+
+```text
+/vtol/camera
+/vtol/camera_info
+/vtol/depth
+/vision/yolo_bbox
+/vision/yolo_annotated_image
+/vision/target_camera_xyz
+/target/ned
+```
+
+---
+
+### Problem: `ros2 param` or `ros2 topic echo` shows `rclpy.ok()` error
+
+This can happen if ROS2 CLI commands were force-stopped repeatedly.
+
+Reset the ROS2 daemon:
+
+```bash
+pkill -f ros2cli_daemon || true
+ros2 daemon stop || true
+ros2 daemon start
+```
+
+---
+
+### Problem: Docker namespace error
 
 Example:
 
@@ -737,7 +697,7 @@ OCI runtime create failed
 namespace path: lstat /proc/.../ns/net: no such file or directory
 ```
 
-This usually happens when `ros2-vision` tries to attach to the network namespace of `px4-gazebo`, but `px4-gazebo` has already exited.
+This usually means `px4-gazebo` exited and `ros2-vision` tried to attach to its network namespace.
 
 Check:
 
@@ -759,7 +719,7 @@ If Docker or WSL is stuck, run this in Windows PowerShell:
 wsl --shutdown
 ```
 
-Then restart Docker Desktop and run:
+Then restart Docker Desktop and run again:
 
 ```bash
 cd ~/drone_stack
@@ -768,27 +728,47 @@ cd ~/drone_stack
 
 ---
 
-## 12. Clean Restart
+## 12. Final working checklist
 
-From host WSL:
+The setup is considered working when all of these are true:
 
-```bash
-cd ~/drone_stack
+```text
+docker ps:
+  px4-gazebo        Up
+  microxrce-agent   Up
+  ros2-vision       Up
 
-docker compose down --remove-orphans
+microxrce-agent log:
+  create_topic
+  create_datawriter
 
-./start.sh
-```
+ROS2 PX4 topics:
+  /fmu/out/vehicle_local_position
+  /fmu/out/vehicle_status
+  /fmu/in/trajectory_setpoint
+  /fmu/in/offboard_control_mode
 
-Check status:
+Gazebo camera topics:
+  /vtol/camera
+  /vtol/camera_info
+  /vtol/depth
 
-```bash
-docker compose ps -a
+ROS2 vision topics:
+  /vtol/camera
+  /vtol/camera_info
+  /vtol/depth
+  /vision/yolo_bbox
+  /vision/yolo_annotated_image
+  /vision/target_camera_xyz
+  /target/ned
+
+QGroundControl:
+  connected through UDP 14550 / 18570
 ```
 
 ---
 
-## 13. Git Workflow
+## 13. Git workflow
 
 Check changes:
 
@@ -800,20 +780,21 @@ Stage only intended files:
 
 ```bash
 git add README.md
-git add .gitignore
-git add ros2/ws/src/my_first_pkg/COLCON_IGNORE
-git add ros2/ws/src/drone_control/setup.py
-git add ros2/ws/src/drone_vision/setup.py
-git add ros2/ws/src/drone_vision/drone_vision/yolo_detector.py
 git add px4/entrypoint.sh
 git add compose.yaml
-git add px4_assets/worlds/psi_vtol_world.sdf
+git add .gitignore
+```
+
+If launch parameters were changed:
+
+```bash
+git add ros2/ws/src/drone_control/launch/mission_system.launch.py
 ```
 
 Commit:
 
 ```bash
-git commit -m "Fix reproducible PX4 and ROS2 setup"
+git commit -m "Document reproducible PX4 ROS2 Gazebo setup"
 ```
 
 Push:
@@ -822,60 +803,16 @@ Push:
 git push origin orange-fix
 ```
 
-Do not commit generated folders:
+Do not commit generated or external files:
 
 ```text
+px4/PX4-Autopilot/
 ros2/ws/build/
 ros2/ws/install/
 ros2/ws/log/
-px4/PX4-Autopilot/
+*.pt
+*.pth
+*.onnx
+*.engine
+*.tflite
 ```
-
-Also avoid staging unrelated files with:
-
-```bash
-git add .
-```
-
-when only specific files should be committed.
-
----
-
-## 14. MuJoCo RL
-
-The MuJoCo RL workspace is stored in:
-
-```text
-mujoco_rl/
-```
-
-Typical workflow:
-
-```bash
-cd ~/drone_stack/mujoco_rl
-
-docker run --rm -it \
-  -p 6006:6006 \
-  -v "$PWD":/workspace/mujoco_rl \
-  mujoco-rl:landing
-```
-
-TensorBoard:
-
-```bash
-tensorboard --logdir ./runs --host 0.0.0.0 --port 6006
-```
-
----
-
-## 15. Current Notes
-
-- Use `colcon build`, not `colcon build --symlink-install`.
-- Ignore `my_first_pkg` using `COLCON_IGNORE`.
-- Store custom PX4 worlds in `px4_assets/worlds/`.
-- Use `./start.sh` instead of `docker compose up`.
-- Treat `px4/PX4-Autopilot/` as an external dependency.
-- Do not commit `.pt` model weight files to GitHub.
-- Download `aruco_best.pt` from Microsoft Teams > 미션팀 자료 and place it in `ros2/ws/src/drone_vision/models/`.
-- Use `aruco_best.pt` as the mission marker detector. Current class 0 is `yolo-marker`.
-- Treat `best.pt` as an optional COCO/person detection test model, not as the mission marker model.

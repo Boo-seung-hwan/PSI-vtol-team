@@ -145,9 +145,13 @@ RCS_FILE="/workspace/px4/PX4-Autopilot/ROMFS/px4fmu_common/init.d-posix/rcS"
 
 echo "[DEBUG_XRCE] patching uxrce_dds_client agent host"
 
-sed -i \
-  's|uxrce_dds_client start -t udp -p $uxrce_dds_port $uxrce_dds_ns|uxrce_dds_client start -t udp -h microxrce-agent -p $uxrce_dds_port $uxrce_dds_ns|' \
+sed -i -E \
+  "s|uxrce_dds_client start -t udp( -h [^ ]+)? -p \$uxrce_dds_port \$uxrce_dds_ns|uxrce_dds_client start -t udp -h ${PX4_UXRCE_DDS_AG_IP} -p \$uxrce_dds_port \$uxrce_dds_ns|" \
   "$RCS_FILE"
+
+
+# Override any existing "-h <host>" in the uXRCE line.
+sed -i -E "s|uxrce_dds_client start -t udp( -h [^ ]+)? -p \\\$uxrce_dds_port \\\$uxrce_dds_ns|uxrce_dds_client start -t udp -h ${PX4_UXRCE_DDS_AG_IP} -p \\\$uxrce_dds_port \\\$uxrce_dds_ns|" "$RCS_FILE"
 
 echo "[DEBUG_XRCE] rcS uXRCE line after patch:"
 grep -n "uxrce_dds_client start" "$RCS_FILE" || true

@@ -82,6 +82,11 @@ services:
       - QT_X11_NO_MITSHM=1
       - GZ_PARTITION=px4-gz
       #- GZ_RELAY=px4-gazebo
+      - ROS_DOMAIN_ID=0
+      - ROS_LOCALHOST_ONLY=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+
     volumes:
       - ./ros2:/workspace/ros2
       - ./models:/workspace/ml_models
@@ -107,6 +112,11 @@ services:
     stdin_open: true
     tty: true
     command: ["MicroXRCEAgent", "udp4", "-p", "8888"]
+    environment:
+      - ROS_DOMAIN_ID=0
+      - ROS_LOCALHOST_ONLY=0
+      - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
+      - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
     networks:
       - drone_net
 
