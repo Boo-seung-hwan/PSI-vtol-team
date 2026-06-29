@@ -73,7 +73,7 @@ Do not use PX4 `main` unless the ROS2 topic names are updated. PX4 `main` may pr
 
 checking command
 
-'''text
+```text
 docker exec -it ros2-vision bash -lc '
 cd /workspace/ros2/ws
 source /opt/ros/humble/setup.bash
@@ -86,7 +86,7 @@ echo ""
 echo "PX4 input topics:"
 ros2 topic list | grep -E "^/fmu/in/trajectory_setpoint|^/fmu/in/offboard_control_mode"
 '
-'''
+```
 
 Recommended PX4 version:
 
