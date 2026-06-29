@@ -71,6 +71,11 @@ Do not use PX4 `main` unless the ROS2 topic names are updated. PX4 `main` may pr
 /fmu/out/vehicle_local_position_v1
 ```
 
+checking command
+'''text
+
+'''
+
 Recommended PX4 version:
 
 ```text
