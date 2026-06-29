@@ -96,6 +96,22 @@ PX4 commit: 85df8c2281
 Expected describe: v1.15.4-4-g85df8c2281-dirty
 ```
 
+Checking PX4 version command
+
+```text
+cd ~/drone_stack/px4/PX4-Autopilot
+
+echo "PX4 branch:"
+git branch --show-current
+
+echo "PX4 commit:"
+git rev-parse --short HEAD
+
+echo "PX4 describe:"
+git describe --tags --always --dirty
+```
+
+
 Set PX4 to the expected version:
 
 ```bash
