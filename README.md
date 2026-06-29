@@ -74,7 +74,18 @@ Do not use PX4 `main` unless the ROS2 topic names are updated. PX4 `main` may pr
 checking command
 
 '''text
+docker exec -it ros2-vision bash -lc '
+cd /workspace/ros2/ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
 
+echo "PX4 output topics:"
+ros2 topic list | grep -E "^/fmu/out/vehicle_status|^/fmu/out/vehicle_local_position"
+
+echo ""
+echo "PX4 input topics:"
+ros2 topic list | grep -E "^/fmu/in/trajectory_setpoint|^/fmu/in/offboard_control_mode"
+'
 '''
 
 Recommended PX4 version:
