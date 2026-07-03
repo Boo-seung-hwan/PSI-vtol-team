@@ -1,0 +1,9 @@
+services:
+  px4-gazebo:
+    environment:
+      - LIBGL_ALWAYS_SOFTWARE=1
+      - GALLIUM_DRIVER=llvmpipe
+
+  ros2-vision:
+    environment:
+      - YOLO_DEVICE=cpu

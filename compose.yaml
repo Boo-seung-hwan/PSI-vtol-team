@@ -26,8 +26,6 @@ services:
       - WAYLAND_DISPLAY=wayland-0
       - XDG_RUNTIME_DIR=/mnt/wslg/runtime-dir
       - QT_X11_NO_MITSHM=1
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all
       - GZ_PARTITION=px4-gz
       #- GZ_RELAY=ros2-vision
       - MAV_BROADCAST=1
@@ -52,13 +50,6 @@ services:
     networks:
       - drone_net
 
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
   ros2-vision:
     build:
@@ -96,13 +87,6 @@ services:
       - /run/user/1000:/run/user/1000
     working_dir: /workspace/ros2
     command: bash
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
 
   microxrce-agent:
     build:
