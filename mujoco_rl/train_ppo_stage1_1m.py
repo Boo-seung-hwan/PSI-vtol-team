@@ -11,6 +11,9 @@ N_ENVS = 4
 
 def make_config():
     return LandingConfig(
+        max_steps=420,
+        residual_z_mps=0.05,
+
         init_xy_range_m=4.0,
         init_altitude_min_m=2.0,
         init_altitude_max_m=5.0,
@@ -58,8 +61,8 @@ def main():
 
     checkpoint_callback = CheckpointCallback(
         save_freq=max(100_000 // N_ENVS, 1),
-        save_path="./runs/checkpoints_v3_stage1",
-        name_prefix="ppo_landing_v3_stage1",
+        save_path="./runs/checkpoints_v3_stage1_rewardfix1",
+        name_prefix="ppo_landing_v3_stage1_rewardfix1",
         save_replay_buffer=False,
         save_vecnormalize=True,
     )
@@ -68,22 +71,22 @@ def main():
         "./runs/ppo_landing_residual_v3_stage0_final.zip",
         env=env,
         device="cpu",
-        tensorboard_log="./runs/tensorboard_v3_stage1",
+        tensorboard_log="./runs/tensorboard_v3_stage1_rewardfix1",
     )
 
     model.learn(
         total_timesteps=1_000_000,
         callback=checkpoint_callback,
         reset_num_timesteps=False,
-        tb_log_name="PPO_stage1",
+        tb_log_name="PPO_stage1_rewardfix1",
     )
 
-    model.save("./runs/ppo_landing_residual_v3_stage1_final")
-    env.save("./runs/vecnormalize_v3_stage1.pkl")
+    model.save("./runs/ppo_landing_residual_v3_stage1_rewardfix1_final")
+    env.save("./runs/vecnormalize_v3_stage1_rewardfix1.pkl")
 
-    print("Stage 1 training finished.")
-    print("Saved model: ./runs/ppo_landing_residual_v3_stage1_final.zip")
-    print("Saved VecNormalize: ./runs/vecnormalize_v3_stage1.pkl")
+    print("Stage 1 rewardfix1 training finished.")
+    print("Saved model: ./runs/ppo_landing_residual_v3_stage1_rewardfix1_final.zip")
+    print("Saved VecNormalize: ./runs/vecnormalize_v3_stage1_rewardfix1.pkl")
 
 
 if __name__ == "__main__":

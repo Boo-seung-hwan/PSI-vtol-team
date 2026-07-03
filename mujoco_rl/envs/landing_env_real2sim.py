@@ -6,6 +6,11 @@ import numpy as np
 from gymnasium import spaces
 
 
+def wrap_pi(angle: float) -> float:
+    """Wrap an angle to [-pi, pi]."""
+    return math.atan2(math.sin(angle), math.cos(angle))
+
+
 @dataclass
 class LandingConfig:
 
@@ -36,6 +41,12 @@ class LandingConfig:
     kd_z: float = 0.12
     max_pid_xy_mps: float = 0.70
     max_pid_z_mps: float = 0.35
+
+
+    #Descent when landing close to ground
+    descent_xy_gate_m: float = 0.45
+    descent_start_height_m: float = 1.2
+    landing_descent_bias_mps: float = 0.12
 
     # When target_valid is false, the safe behavior is to command hover/hold.
     freeze_control_when_target_invalid: bool = True
@@ -73,16 +84,16 @@ class LandingConfig:
     # ------------------------------------------------------------------
     # Disturbance models
     # ------------------------------------------------------------------
-    wind_accel_xy_max_mps2: float = 0.08
-    wind_accel_z_max_mps2: float = 0.02
+    wind_accel_xy_max_mps2: float = 0.00             #0.08
+    wind_accel_z_max_mps2: float = 0.00              #0.02
     process_noise_vel_std_mps: float = 0.006
 
     # ------------------------------------------------------------------
     # Perception / target measurement model
     # target_true is [0, 0, 0]. target_measured is an absolute NED target.
     # ------------------------------------------------------------------
-    target_noise_xy_std_m: float = 0.04
-    target_noise_z_std_m: float = 0.03
+    target_noise_xy_std_m: float = 0.00              #0.04
+    target_noise_z_std_m: float = 0.00               #0.03
     target_noise_max_m: float = 0.15
 
     target_dropout_prob: float = 0.03     # detection invalid for this frame
@@ -90,8 +101,100 @@ class LandingConfig:
     target_outlier_xy_m: float = 1.5
     target_stale_prob: float = 0.05       # old target value is repeated
 
-    # Observation noise for vehicle velocity
+    # Observation noise for vehicle velocity / acceleration
     velocity_obs_noise_std_mps: float = 0.015
+    acceleration_obs_noise_std_mps2: float = 0.05
+    max_acceleration_obs_mps2: float = 4.0
+
+    # ------------------------------------------------------------------
+    # Attitude / heading model
+    # This is a lightweight real2sim approximation: velocity-loop commands
+    # imply lateral acceleration demand, which implies roll/pitch tilt.
+    # Yaw is modeled as the vehicle heading tracking a fixed target yaw.
+    # ------------------------------------------------------------------
+    target_yaw_rad: float = 0.0
+    init_roll_pitch_range_rad: float = math.radians(5.0)
+    init_yaw_range_rad: float = math.pi
+
+    attitude_response_alpha_min: float = 0.25
+    attitude_response_alpha_max: float = 0.55
+    max_tilt_target_rad: float = math.radians(25.0)
+    max_tilt_rad: float = math.radians(45.0)
+
+    yaw_align_kp: float = 1.4
+    max_yaw_rate_radps: float = math.radians(90.0)
+
+    attitude_obs_noise_std_rad: float = math.radians(1.0)
+    attitude_process_noise_std_rad: float = math.radians(0.25)
+
+    # ------------------------------------------------------------------
+    # Rigid-body approximation
+    # velocity command -> desired acceleration -> attitude/thrust setpoint
+    # -> body-rate/thrust first-order response -> NED acceleration.
+    # This is still much simpler than PX4+motor dynamics, but it preserves
+    # the landing-relevant delay chain that the old velocity first-order
+    # model compressed away.
+    # ------------------------------------------------------------------
+    gravity_mps2: float = 9.8065
+    vel_cmd_tau_s: float = 0.45
+    max_cmd_accel_xy_mps2: float = 1.8
+    max_cmd_accel_z_mps2: float = 1.0
+
+    attitude_time_constant_s: float = 0.22
+    body_rate_response_alpha_min: float = 0.25
+    body_rate_response_alpha_max: float = 0.55
+    max_roll_pitch_rate_radps: float = math.radians(220.0)
+    max_yaw_rate_response_radps: float = math.radians(120.0)
+    body_rate_process_noise_std_radps: float = math.radians(1.5)
+
+    thrust_response_alpha_min: float = 0.18
+    thrust_response_alpha_max: float = 0.45
+    min_thrust_accel_mps2: float = 0.25 * 9.8065
+    max_thrust_accel_mps2: float = 1.80 * 9.8065
+    thrust_process_noise_std_mps2: float = 0.08
+
+    # Aerodynamic/drag damping. Kept intentionally small because PX4 inner
+    # loops already stabilize the platform in the real system.
+    linear_drag_xy: float = 0.10
+    linear_drag_z: float = 0.06
+
+    # ------------------------------------------------------------------
+    # Near-ground / touchdown model
+    # ground_z_m follows PX4 local NED convention: z=0 is the pad/ground,
+    # negative z is above the ground. This block adds landing-specific physics
+    # that the old velocity-response model could not represent: ground effect,
+    # contact impulse, bounce, touchdown quality, and motor cutoff after a soft
+    # touchdown.
+    # ------------------------------------------------------------------
+    ground_z_m: float = 0.0
+    ground_effect_height_m: float = 0.80
+    ground_effect_gain: float = 0.00        #0.18
+    ground_effect_max_factor: float = 1.25
+
+    contact_enabled: bool = True
+    success_requires_contact: bool = True
+    contact_success_hold_steps: int = 2
+
+    touchdown_vz_soft_mps: float = 0.22       # NED +z/downward impact speed
+    touchdown_vxy_soft_mps: float = 0.30
+    touchdown_tilt_soft_rad: float = math.radians(12.0)
+    hard_touchdown_vz_mps: float = 0.75
+    hard_touchdown_vxy_mps: float = 0.90
+    hard_touchdown_tilt_rad: float = math.radians(28.0)
+
+    bounce_vz_threshold_mps: float = 0.25
+    bounce_restitution_min: float = 0.08
+    bounce_restitution_max: float = 0.35
+    max_bounce_count: int = 2
+    ground_friction_xy: float = 0.55
+
+    motor_cutoff_on_soft_contact: bool = True
+    motor_cutoff_thrust_accel_mps2: float = 0.0
+
+    w_touchdown_impact: float = 5.0
+    w_touchdown_lateral: float = 1.5
+    w_touchdown_tilt: float = 4.0
+    w_bounce: float = 30.0
 
     # ------------------------------------------------------------------
     # Safety limits
@@ -108,6 +211,8 @@ class LandingConfig:
     success_altitude_m: float = 0.05
     success_vxy_mps: float = 0.20
     success_vz_mps: float = 0.15
+    success_tilt_rad: float = math.radians(10.0)
+    success_yaw_error_rad: float = math.radians(20.0)
 
     # ------------------------------------------------------------------
     # Reward coefficients
@@ -115,17 +220,23 @@ class LandingConfig:
     w_xy: float = 1.00
     w_z: float = 0.35
     w_speed: float = 0.08
+    w_accel: float = 0.03
     w_action: float = 0.03
     w_saturation: float = 0.70
     w_near_ground_vz: float = 1.50
+    w_tilt: float = 0.20
+    w_yaw: float = 0.00             #0.05
+    w_near_ground_tilt: float = 0.80
 
 
 class LandingEnv(gym.Env):
     
 
-    """Observation, shape=(10,):
+    """Observation, shape=(16,):
         [dx_obs, dy_obs, dz_obs,
          vx_obs, vy_obs, vz_obs,
+         ax_obs, ay_obs, az_obs,
+         roll, pitch, yaw_error,
          prev_action_x, prev_action_y, prev_action_z,
          target_valid]
 
@@ -133,7 +244,9 @@ class LandingEnv(gym.Env):
         normalized residual velocity command in [-1, 1]^3.
 
     Control law inside the environment:
-        v_cmd = v_pid + v_residual
+        v_cmd = v_pid + v_residual. The inner plant model then maps v_cmd to
+        desired acceleration, attitude/thrust setpoints, delayed body-rate and
+        thrust response, NED rigid-body acceleration, and landing contact.
 
     The reward and termination use the true target [0, 0, 0], while the policy
     and PID use delayed/noisy/stale/dropout target measurements.
@@ -154,13 +267,22 @@ class LandingEnv(gym.Env):
 
         # Last element is target_valid, represented as 0.0 or 1.0.
         high = np.array(
-            [30.0, 30.0, 30.0, 6.0, 6.0, 6.0, 1.0, 1.0, 1.0, 1.0],
+            [
+                30.0, 30.0, 30.0,      # position error [m]
+                6.0, 6.0, 6.0,         # velocity [m/s]
+                self.cfg.max_acceleration_obs_mps2,
+                self.cfg.max_acceleration_obs_mps2,
+                self.cfg.max_acceleration_obs_mps2,  # acceleration [m/s^2]
+                math.pi, math.pi, math.pi,  # roll, pitch, yaw_error [rad]
+                1.0, 1.0, 1.0,         # previous normalized action
+                1.0,                   # target_valid
+            ],
             dtype=np.float32,
         )
         self.observation_space = spaces.Box(
             low=-high,
             high=high,
-            shape=(10,),
+            shape=(16,),
             dtype=np.float32,
         )
 
@@ -170,6 +292,19 @@ class LandingEnv(gym.Env):
 
         self.pos = np.zeros(3, dtype=np.float64)
         self.vel = np.zeros(3, dtype=np.float64)
+        self.accel = np.zeros(3, dtype=np.float64)
+        self.prev_accel = np.zeros(3, dtype=np.float64)
+
+        # attitude = [roll, pitch, yaw] in radians.
+        # roll/pitch are coupled to lateral acceleration demand; yaw tracks target_yaw.
+        self.attitude = np.zeros(3, dtype=np.float64)
+        self.target_yaw = float(self.cfg.target_yaw_rad)
+        self.yaw_rate = 0.0
+        self.body_rates = np.zeros(3, dtype=np.float64)  # [p, q, r] proxy [rad/s]
+        self.thrust_accel = float(self.cfg.gravity_mps2)  # collective thrust per mass [m/s^2]
+        self.attitude_setpoint = np.zeros(3, dtype=np.float64)
+        self.thrust_accel_setpoint = float(self.cfg.gravity_mps2)
+        self.accel_cmd = np.zeros(3, dtype=np.float64)
 
         self.prev_action = np.zeros(3, dtype=np.float64)
         self.action_queue: list[np.ndarray] = []
@@ -178,15 +313,34 @@ class LandingEnv(gym.Env):
         self.step_count = 0
 
         # Per-episode randomized values
-        self.vel_response_alpha = np.ones(3, dtype=np.float64) * 0.35
+        self.vel_response_alpha = np.ones(3, dtype=np.float64) * 0.35  # kept for backward-compatible info fields
+        self.attitude_response_alpha = np.ones(2, dtype=np.float64) * 0.40  # kept for backward-compatible info fields
+        self.body_rate_response_alpha = np.ones(3, dtype=np.float64) * 0.40
+        self.thrust_response_alpha = 0.30
         self.wind_accel = np.zeros(3, dtype=np.float64)
-        self.action_delay_steps = 2
+        self.action_delay_steps = 0      #2
         self.obs_delay_steps = 2
 
         # Current delayed target used by both observation and PID.
         self.obs_target = np.zeros(3, dtype=np.float64)
         self.obs_target_valid = True
         self.obs_target_mode = "init"
+
+        # Landing-contact state. These are reset every episode and updated by
+        # the contact model after position integration.
+        self.ground_contact = False
+        self.contact_count = 0
+        self.bounce_count = 0
+        self.motor_cutoff = False
+        self.ground_effect_factor = 1.0
+        self.contact_event = False
+        self.soft_contact = False
+        self.hard_contact = False
+        self.bounced = False
+        self.touchdown_quality = "none"
+        self.last_impact_vz = 0.0
+        self.last_touchdown_vxy = 0.0
+        self.last_bounce_speed = 0.0
 
     # ------------------------------------------------------------------
     # Sampling helpers
@@ -255,6 +409,9 @@ class LandingEnv(gym.Env):
         self.obs_target_valid = bool(delayed_valid)
         self.obs_target_mode = delayed_mode
 
+    def _yaw_error(self) -> float:
+        return wrap_pi(self.target_yaw - float(self.attitude[2]))
+
     def _get_obs(self) -> np.ndarray:
         error_obs = self.obs_target - self.pos
 
@@ -264,12 +421,40 @@ class LandingEnv(gym.Env):
             size=3,
         )
 
+        accel_obs = self.accel + self.np_random.normal(
+            0.0,
+            self.cfg.acceleration_obs_noise_std_mps2,
+            size=3,
+        )
+        accel_obs = np.clip(
+            accel_obs,
+            -self.cfg.max_acceleration_obs_mps2,
+            self.cfg.max_acceleration_obs_mps2,
+        )
+
+        attitude_obs = np.array(
+            [
+                self.attitude[0],
+                self.attitude[1],
+                self._yaw_error(),
+            ],
+            dtype=np.float64,
+        )
+        attitude_obs += self.np_random.normal(
+            0.0,
+            self.cfg.attitude_obs_noise_std_rad,
+            size=3,
+        )
+        attitude_obs[2] = wrap_pi(float(attitude_obs[2]))
+
         valid = 1.0 if self.obs_target_valid else 0.0
 
         obs = np.concatenate(
             [
                 error_obs,
                 vel_obs,
+                accel_obs,
+                attitude_obs,
                 self.prev_action,
                 np.array([valid], dtype=np.float64),
             ]
@@ -294,6 +479,16 @@ class LandingEnv(gym.Env):
         norm_xy = float(np.linalg.norm(vxy))
         if norm_xy > self.cfg.max_pid_xy_mps:
             vxy *= self.cfg.max_pid_xy_mps / (norm_xy + 1e-9)
+
+        altitude_agl = self._altitude_agl()
+        xy_error = float(np.linalg.norm(error[:2]))
+
+        if (
+            xy_error < self.cfg.descent_xy_gate_m
+            and altitude_agl < self.cfg.descent_start_height_m
+            and altitude_agl > self.cfg.success_altitude_m
+        ):
+            vz = max(vz, self.cfg.landing_descent_bias_mps)
 
         vz = float(np.clip(vz, -self.cfg.max_pid_z_mps, self.cfg.max_pid_z_mps))
 
@@ -329,6 +524,323 @@ class LandingEnv(gym.Env):
         self.action_queue.append(raw_action.copy())
         return self.action_queue.pop(0)
 
+    def _altitude_agl(self) -> float:
+        """Altitude above ground in meters. In NED, negative z is above ground."""
+        return max(0.0, float(self.cfg.ground_z_m - self.pos[2]))
+
+    def _compute_ground_effect_factor(self) -> float:
+        """Return thrust multiplier caused by ground effect near the pad."""
+        h = self._altitude_agl()
+        height = max(float(self.cfg.ground_effect_height_m), 1e-6)
+
+        if h >= height or self.ground_contact:
+            return 1.0
+
+        closeness = 1.0 - h / height
+        factor = 1.0 + float(self.cfg.ground_effect_gain) * closeness * closeness
+        return float(np.clip(factor, 1.0, self.cfg.ground_effect_max_factor))
+
+    def _reset_contact_step_flags(self) -> None:
+        self.contact_event = False
+        self.soft_contact = False
+        self.hard_contact = False
+        self.bounced = False
+        self.touchdown_quality = "none"
+        self.last_impact_vz = 0.0
+        self.last_touchdown_vxy = 0.0
+        self.last_bounce_speed = 0.0
+
+    def _apply_ground_contact(self, vel_before_step: np.ndarray) -> None:
+        """Resolve simple ground contact and bounce at z=ground_z_m.
+
+        NED convention: z velocity > 0 means descending toward the ground.
+        A soft touchdown pins the vehicle to the ground and optionally cuts
+        thrust. A faster touchdown creates an upward rebound. A very fast or
+        highly tilted touchdown is marked as hard contact and will terminate
+        the episode as a failed landing.
+        """
+        if not self.cfg.contact_enabled:
+            return
+
+        ground_z = float(self.cfg.ground_z_m)
+        if self.pos[2] < ground_z:
+            self.ground_contact = False
+            self.contact_count = 0
+            return
+
+        self.contact_event = True
+        self.ground_contact = True
+        self.contact_count += 1
+        self.pos[2] = ground_z
+
+        impact_vz = max(float(self.vel[2]), float(vel_before_step[2]), 0.0)
+        touchdown_vxy = float(np.linalg.norm(self.vel[:2]))
+        tilt = float(np.linalg.norm(self.attitude[:2]))
+
+        self.last_impact_vz = impact_vz
+        self.last_touchdown_vxy = touchdown_vxy
+
+        self.hard_contact = (
+            impact_vz > self.cfg.hard_touchdown_vz_mps
+            or touchdown_vxy > self.cfg.hard_touchdown_vxy_mps
+            or tilt > self.cfg.hard_touchdown_tilt_rad
+        )
+
+        self.soft_contact = (
+            impact_vz <= self.cfg.touchdown_vz_soft_mps
+            and touchdown_vxy <= self.cfg.touchdown_vxy_soft_mps
+            and tilt <= self.cfg.touchdown_tilt_soft_rad
+            and not self.hard_contact
+        )
+
+        if self.hard_contact:
+            self.touchdown_quality = "hard"
+        elif self.soft_contact:
+            self.touchdown_quality = "soft"
+        else:
+            self.touchdown_quality = "rough"
+
+        # Tangential ground friction removes lateral sliding at contact.
+        self.vel[:2] *= float(np.clip(1.0 - self.cfg.ground_friction_xy, 0.0, 1.0))
+
+        should_bounce = (
+            impact_vz > self.cfg.bounce_vz_threshold_mps
+            and not self.soft_contact
+        )
+
+        if should_bounce:
+            restitution = float(self.np_random.uniform(
+                self.cfg.bounce_restitution_min,
+                self.cfg.bounce_restitution_max,
+            ))
+            bounce_speed = restitution * impact_vz
+            self.vel[2] = -bounce_speed  # negative NED z means rebound upward
+            self.bounced = True
+            self.bounce_count += 1
+            self.contact_count = 0
+            self.last_bounce_speed = bounce_speed
+            if not self.hard_contact:
+                self.touchdown_quality = "bounce"
+        else:
+            # No rebound: vehicle stays on the ground.
+            self.vel[2] = 0.0
+            self.last_bounce_speed = 0.0
+
+        if self.soft_contact and self.cfg.motor_cutoff_on_soft_contact:
+            self.motor_cutoff = True
+            self.thrust_accel_setpoint = float(self.cfg.motor_cutoff_thrust_accel_mps2)
+            self.thrust_accel = float(self.cfg.motor_cutoff_thrust_accel_mps2)
+
+    def _rotation_body_to_ned(self) -> np.ndarray:
+        """Body-to-NED rotation matrix using aerospace roll/pitch/yaw."""
+        roll, pitch, yaw = [float(v) for v in self.attitude]
+        cr, sr = math.cos(roll), math.sin(roll)
+        cp, sp = math.cos(pitch), math.sin(pitch)
+        cy, sy = math.cos(yaw), math.sin(yaw)
+
+        # R = Rz(yaw) * Ry(pitch) * Rx(roll)
+        return np.array(
+            [
+                [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
+                [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
+                [-sp, cp * sr, cp * cr],
+            ],
+            dtype=np.float64,
+        )
+
+    def _velocity_command_to_inner_loop_setpoints(
+        self,
+        v_cmd: np.ndarray,
+        dt: float,
+    ) -> tuple[np.ndarray, float, np.ndarray]:
+        """Convert velocity command to attitude/thrust setpoints.
+
+        This approximates the PX4 cascade:
+            velocity command -> acceleration demand -> attitude/thrust setpoint.
+
+        NED convention is used. Positive z acceleration means downward
+        acceleration, so it is produced by reducing collective thrust below
+        hover thrust.
+        """
+        dt_safe = max(float(dt), 1e-6)
+        g = float(self.cfg.gravity_mps2)
+
+        # Desired NED acceleration from velocity error. This replaces the old
+        # direct first-order velocity response with a physically interpretable
+        # acceleration request.
+        accel_cmd = (np.asarray(v_cmd, dtype=np.float64) - self.vel) / max(
+            self.cfg.vel_cmd_tau_s,
+            dt_safe,
+        )
+
+        axy_norm = float(np.linalg.norm(accel_cmd[:2]))
+        if axy_norm > self.cfg.max_cmd_accel_xy_mps2:
+            accel_cmd[:2] *= self.cfg.max_cmd_accel_xy_mps2 / (axy_norm + 1e-9)
+        accel_cmd[2] = float(np.clip(
+            accel_cmd[2],
+            -self.cfg.max_cmd_accel_z_mps2,
+            self.cfg.max_cmd_accel_z_mps2,
+        ))
+
+        # Near-hover multicopter tilt approximation in NED.
+        # +roll produces +East acceleration. +pitch produces -North acceleration.
+        denom = max(g - float(accel_cmd[2]), 1e-3)
+        roll_sp = math.atan2(float(accel_cmd[1]), denom)
+        pitch_sp = math.atan2(-float(accel_cmd[0]), denom)
+
+        roll_sp = float(np.clip(
+            roll_sp,
+            -self.cfg.max_tilt_target_rad,
+            self.cfg.max_tilt_target_rad,
+        ))
+        pitch_sp = float(np.clip(
+            pitch_sp,
+            -self.cfg.max_tilt_target_rad,
+            self.cfg.max_tilt_target_rad,
+        ))
+
+        yaw_sp = float(self.target_yaw)
+        thrust_sp = float(np.clip(
+            g - float(accel_cmd[2]),
+            self.cfg.min_thrust_accel_mps2,
+            self.cfg.max_thrust_accel_mps2,
+        ))
+
+        attitude_sp = np.array([roll_sp, pitch_sp, yaw_sp], dtype=np.float64)
+        return attitude_sp, thrust_sp, accel_cmd
+
+    def _update_rigid_body_dynamics(self, v_cmd: np.ndarray, dt: float) -> None:
+        """Update attitude, thrust, acceleration, velocity, and position.
+
+        This is a compact 6DoF-inspired plant model. It does not simulate motor
+        mixing or rotor angular momentum, but it exposes the key delay chain:
+            v_cmd -> attitude/thrust setpoint -> body-rate/thrust response
+            -> thrust vector in NED -> acceleration -> velocity -> position.
+        """
+        dt_safe = max(float(dt), 1e-6)
+        g = float(self.cfg.gravity_mps2)
+
+        self._reset_contact_step_flags()
+        vel_before = self.vel.copy()
+
+        attitude_sp, thrust_sp, accel_cmd = self._velocity_command_to_inner_loop_setpoints(v_cmd, dt_safe)
+        if self.motor_cutoff:
+            thrust_sp = float(self.cfg.motor_cutoff_thrust_accel_mps2)
+
+        self.attitude_setpoint = attitude_sp.copy()
+        self.thrust_accel_setpoint = float(thrust_sp)
+        self.accel_cmd = accel_cmd.copy()
+
+        # Attitude/rate controller proxy.
+        att_error = np.array(
+            [
+                attitude_sp[0] - self.attitude[0],
+                attitude_sp[1] - self.attitude[1],
+                wrap_pi(float(attitude_sp[2] - self.attitude[2])),
+            ],
+            dtype=np.float64,
+        )
+
+        rate_cmd = att_error / max(self.cfg.attitude_time_constant_s, dt_safe)
+        rate_cmd[0] = float(np.clip(
+            rate_cmd[0],
+            -self.cfg.max_roll_pitch_rate_radps,
+            self.cfg.max_roll_pitch_rate_radps,
+        ))
+        rate_cmd[1] = float(np.clip(
+            rate_cmd[1],
+            -self.cfg.max_roll_pitch_rate_radps,
+            self.cfg.max_roll_pitch_rate_radps,
+        ))
+        rate_cmd[2] = float(np.clip(
+            self.cfg.yaw_align_kp * att_error[2],
+            -self.cfg.max_yaw_rate_response_radps,
+            self.cfg.max_yaw_rate_response_radps,
+        ))
+
+        rate_alpha_eff = 1.0 - np.power(
+            1.0 - np.clip(self.body_rate_response_alpha, 1e-4, 0.9999),
+            dt_safe / max(self.cfg.dt, 1e-6),
+        )
+        rate_alpha_eff = np.clip(rate_alpha_eff, 0.0, 1.0)
+
+        self.body_rates = self.body_rates + rate_alpha_eff * (rate_cmd - self.body_rates)
+
+        noise_scale = math.sqrt(dt_safe / max(self.cfg.dt, 1e-6))
+        self.body_rates += self.np_random.normal(
+            0.0,
+            self.cfg.body_rate_process_noise_std_radps * noise_scale,
+            size=3,
+        )
+
+        self.attitude[0] = float(np.clip(
+            self.attitude[0] + self.body_rates[0] * dt_safe,
+            -math.pi,
+            math.pi,
+        ))
+        self.attitude[1] = float(np.clip(
+            self.attitude[1] + self.body_rates[1] * dt_safe,
+            -math.pi,
+            math.pi,
+        ))
+        self.attitude[2] = wrap_pi(float(self.attitude[2] + self.body_rates[2] * dt_safe))
+        self.yaw_rate = float(self.body_rates[2])
+
+        # Collective thrust/motor response proxy.
+        thrust_alpha_eff = 1.0 - (1.0 - np.clip(self.thrust_response_alpha, 1e-4, 0.9999)) ** (
+            dt_safe / max(self.cfg.dt, 1e-6)
+        )
+        thrust_alpha_eff = float(np.clip(thrust_alpha_eff, 0.0, 1.0))
+        self.thrust_accel = float(
+            self.thrust_accel
+            + thrust_alpha_eff * (thrust_sp - self.thrust_accel)
+            + self.np_random.normal(0.0, self.cfg.thrust_process_noise_std_mps2 * noise_scale)
+        )
+        thrust_min = (
+            float(self.cfg.motor_cutoff_thrust_accel_mps2)
+            if self.motor_cutoff
+            else float(self.cfg.min_thrust_accel_mps2)
+        )
+        self.thrust_accel = float(np.clip(
+            self.thrust_accel,
+            thrust_min,
+            self.cfg.max_thrust_accel_mps2,
+        ))
+
+        # Rigid-body translational dynamics in NED.
+        r_bn = self._rotation_body_to_ned()
+        body_z_in_ned = r_bn[:, 2]
+        gravity_accel = np.array([0.0, 0.0, g], dtype=np.float64)
+
+        self.ground_effect_factor = self._compute_ground_effect_factor()
+        effective_thrust_accel = self.thrust_accel * self.ground_effect_factor
+        thrust_accel_ned = -effective_thrust_accel * body_z_in_ned
+        drag_accel = -np.array(
+            [
+                self.cfg.linear_drag_xy * self.vel[0],
+                self.cfg.linear_drag_xy * self.vel[1],
+                self.cfg.linear_drag_z * self.vel[2],
+            ],
+            dtype=np.float64,
+        )
+        process_accel_noise = self.np_random.normal(
+            0.0,
+            self.cfg.process_noise_vel_std_mps * noise_scale / max(dt_safe, 1e-6),
+            size=3,
+        )
+
+        self.prev_accel = self.accel.copy()
+        self.accel = gravity_accel + thrust_accel_ned + drag_accel + self.wind_accel + process_accel_noise
+
+        self.vel = self.vel + self.accel * dt_safe
+        self.pos = self.pos + self.vel * dt_safe
+
+        self._apply_ground_contact(vel_before)
+
+        # Keep the acceleration channel consistent with the actual velocity change.
+        # This is the value the policy observes as ax/ay/az.
+        self.accel = (self.vel - vel_before) / dt_safe
+
     # ------------------------------------------------------------------
     # Gymnasium API
     # ------------------------------------------------------------------
@@ -351,8 +863,42 @@ class LandingEnv(gym.Env):
             self.cfg.init_vel_range_mps,
             size=3,
         ).astype(np.float64)
+        self.accel = np.zeros(3, dtype=np.float64)
+        self.prev_accel = np.zeros(3, dtype=np.float64)
 
         self.prev_action = np.zeros(3, dtype=np.float64)
+
+        self.target_yaw = float(self.cfg.target_yaw_rad)
+        self.attitude = np.array(
+            [
+                self.np_random.uniform(
+                    -self.cfg.init_roll_pitch_range_rad,
+                    self.cfg.init_roll_pitch_range_rad,
+                ),
+                self.np_random.uniform(
+                    -self.cfg.init_roll_pitch_range_rad,
+                    self.cfg.init_roll_pitch_range_rad,
+                ),
+                self.np_random.uniform(
+                    -self.cfg.init_yaw_range_rad,
+                    self.cfg.init_yaw_range_rad,
+                ),
+            ],
+            dtype=np.float64,
+        )
+        self.yaw_rate = 0.0
+        self.body_rates = np.zeros(3, dtype=np.float64)
+        self.thrust_accel = float(self.cfg.gravity_mps2)
+        self.attitude_setpoint = self.attitude.copy()
+        self.thrust_accel_setpoint = float(self.cfg.gravity_mps2)
+        self.accel_cmd = np.zeros(3, dtype=np.float64)
+
+        self.ground_contact = False
+        self.contact_count = 0
+        self.bounce_count = 0
+        self.motor_cutoff = False
+        self.ground_effect_factor = 1.0
+        self._reset_contact_step_flags()
 
         self.action_delay_steps = int(
             self.np_random.integers(
@@ -378,6 +924,22 @@ class LandingEnv(gym.Env):
             self.cfg.vel_response_alpha_max,
             size=3,
         ).astype(np.float64)
+
+        self.attitude_response_alpha = self.np_random.uniform(
+            self.cfg.attitude_response_alpha_min,
+            self.cfg.attitude_response_alpha_max,
+            size=2,
+        ).astype(np.float64)
+
+        self.body_rate_response_alpha = self.np_random.uniform(
+            self.cfg.body_rate_response_alpha_min,
+            self.cfg.body_rate_response_alpha_max,
+            size=3,
+        ).astype(np.float64)
+        self.thrust_response_alpha = float(self.np_random.uniform(
+            self.cfg.thrust_response_alpha_min,
+            self.cfg.thrust_response_alpha_max,
+        ))
 
         self.wind_accel = np.array(
             [
@@ -435,26 +997,13 @@ class LandingEnv(gym.Env):
 
         v_cmd = self._limit_velocity_command(v_pid + v_residual)
 
-        # Convert nominal alpha to an effective alpha under dt jitter.
-        # If dt == cfg.dt, alpha_eff == vel_response_alpha.
-        alpha_eff = 1.0 - np.power(
-            1.0 - np.clip(self.vel_response_alpha, 1e-4, 0.9999),
-            dt / max(self.cfg.dt, 1e-6),
-        )
-        alpha_eff = np.clip(alpha_eff, 0.0, 1.0)
+        # Inner-loop and plant dynamics. This replaces the old direct
+        # first-order velocity response with a rigid-body-inspired chain:
+        # v_cmd -> accel_cmd -> attitude/thrust setpoint -> body-rate/thrust
+        # response -> NED acceleration -> velocity -> position.
+        self._update_rigid_body_dynamics(v_cmd, dt)
 
-        self.vel = self.vel + alpha_eff * (v_cmd - self.vel)
-        self.vel = self.vel + self.wind_accel * dt
-
-        # Process noise. Keep scale roughly consistent with the nominal step.
-        noise_scale = math.sqrt(max(dt, 1e-6) / max(self.cfg.dt, 1e-6))
-        self.vel += self.np_random.normal(
-            0.0,
-            self.cfg.process_noise_vel_std_mps * noise_scale,
-            size=3,
-        )
-
-        self.pos = self.pos + self.vel * dt
+        alpha_eff = np.array([math.nan, math.nan, math.nan], dtype=np.float64)
 
         true_error = self.target_true - self.pos
         xy_error = float(np.linalg.norm(true_error[:2]))
@@ -462,11 +1011,22 @@ class LandingEnv(gym.Env):
         vxy = float(np.linalg.norm(self.vel[:2]))
         vz_abs = abs(float(self.vel[2]))
         speed = float(np.linalg.norm(self.vel))
+        accel_mag = float(np.linalg.norm(self.accel))
+        jerk_mag = float(np.linalg.norm((self.accel - self.prev_accel) / max(float(dt), 1e-6)))
+        roll = float(self.attitude[0])
+        pitch = float(self.attitude[1])
+        yaw = float(self.attitude[2])
+        yaw_error = self._yaw_error()
+        yaw_error_abs = abs(float(yaw_error))
+        tilt = float(np.linalg.norm(self.attitude[:2]))
 
         reward = 0.0
         reward += -self.cfg.w_xy * xy_error
         reward += -self.cfg.w_z * z_error
         reward += -self.cfg.w_speed * speed
+        reward += -self.cfg.w_accel * accel_mag
+        reward += -self.cfg.w_tilt * tilt
+        reward += -self.cfg.w_yaw * yaw_error_abs
         reward += -self.cfg.w_action * float(np.linalg.norm(raw_action))
 
         saturation = np.maximum(np.abs(raw_action) - 0.80, 0.0)
@@ -481,13 +1041,35 @@ class LandingEnv(gym.Env):
         # vertical motion is treated as dangerous.
         if z_error < 0.8:
             reward += -self.cfg.w_near_ground_vz * vz_abs
+            reward += -self.cfg.w_near_ground_tilt * tilt
 
-        success = (
+        if self.contact_event:
+            reward += -self.cfg.w_touchdown_impact * (self.last_impact_vz ** 2)
+            reward += -self.cfg.w_touchdown_lateral * (self.last_touchdown_vxy ** 2)
+            reward += -self.cfg.w_touchdown_tilt * (tilt ** 2)
+
+        if self.bounced:
+            reward += -self.cfg.w_bounce * (1.0 + self.last_bounce_speed)
+
+        kinematic_success = (
             xy_error < self.cfg.success_xy_m
             and z_error < self.cfg.success_altitude_m
             and vxy < self.cfg.success_vxy_mps
             and vz_abs < self.cfg.success_vz_mps
+            and tilt < self.cfg.success_tilt_rad
+            and yaw_error_abs < self.cfg.success_yaw_error_rad
         )
+
+        contact_success = (
+            self.ground_contact
+            and not self.bounced
+            and not self.hard_contact
+            and self.touchdown_quality == "soft"
+            and self.contact_count >= self.cfg.contact_success_hold_steps
+            and kinematic_success
+        )
+
+        success = contact_success if self.cfg.success_requires_contact else kinematic_success
 
         failure_reason = "none"
         altitude = -float(self.pos[2])
@@ -498,6 +1080,12 @@ class LandingEnv(gym.Env):
             failure_reason = "altitude_limit"
         elif speed > self.cfg.max_speed_mps:
             failure_reason = "speed_limit"
+        elif tilt > self.cfg.max_tilt_rad:
+            failure_reason = "attitude_tilt_limit"
+        elif self.hard_contact:
+            failure_reason = "hard_landing"
+        elif self.bounce_count > self.cfg.max_bounce_count:
+            failure_reason = "excessive_bounce"
         elif self.pos[2] > self.cfg.below_ground_limit_m:
             failure_reason = "below_ground_limit"
 
@@ -518,19 +1106,51 @@ class LandingEnv(gym.Env):
             "z_error": z_error,
             "vxy": vxy,
             "vz_abs": vz_abs,
+            "accel_mag": accel_mag,
+            "jerk_mag": jerk_mag,
+            "roll": roll,
+            "pitch": pitch,
+            "yaw": yaw,
+            "yaw_error": yaw_error,
+            "tilt": tilt,
+            "yaw_rate": self.yaw_rate,
+            "body_rates": self.body_rates.copy(),
+            "thrust_accel": self.thrust_accel,
+            "thrust_accel_setpoint": self.thrust_accel_setpoint,
+            "attitude_setpoint": self.attitude_setpoint.copy(),
+            "accel_cmd": self.accel_cmd.copy(),
             "success": success,
             "failed": failed,
             "failure_reason": failure_reason,
             "pos": self.pos.copy(),
             "vel": self.vel.copy(),
+            "accel": self.accel.copy(),
+            "prev_accel": self.prev_accel.copy(),
             "target_true": self.target_true.copy(),
             "target_measured": self.target_measured.copy(),
             "target_valid": control_target_valid,
             "target_mode": self.obs_target_mode,
             "dt": dt,
             "vel_response_alpha": self.vel_response_alpha.copy(),
+            "attitude_response_alpha": self.attitude_response_alpha.copy(),
+            "body_rate_response_alpha": self.body_rate_response_alpha.copy(),
+            "thrust_response_alpha": self.thrust_response_alpha,
             "alpha_eff": alpha_eff.copy(),
             "wind_accel": self.wind_accel.copy(),
+            "ground_effect_factor": self.ground_effect_factor,
+            "ground_contact": self.ground_contact,
+            "contact_event": self.contact_event,
+            "contact_count": self.contact_count,
+            "bounce_count": self.bounce_count,
+            "soft_contact": self.soft_contact,
+            "hard_contact": self.hard_contact,
+            "bounced": self.bounced,
+            "touchdown_quality": self.touchdown_quality,
+            "last_impact_vz": self.last_impact_vz,
+            "last_touchdown_vxy": self.last_touchdown_vxy,
+            "last_bounce_speed": self.last_bounce_speed,
+            "motor_cutoff": self.motor_cutoff,
+            "altitude_agl": self._altitude_agl(),
             "action_delay_steps": self.action_delay_steps,
             "obs_delay_steps": self.obs_delay_steps,
             "applied_action": applied_action.copy(),
