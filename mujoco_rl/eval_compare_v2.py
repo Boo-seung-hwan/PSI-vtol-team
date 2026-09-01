@@ -24,19 +24,19 @@ def make_config():
         dt_jitter_std=0.010,
 
         action_delay_steps_min=1,
-        action_delay_steps_max=5,
+        action_delay_steps_max=1,
         obs_delay_steps_min=1,
-        obs_delay_steps_max=5,
+        obs_delay_steps_max=1,
 
-        target_dropout_prob=0.05,
-        target_outlier_prob=0.02,
-        target_stale_prob=0.08,
-        target_noise_xy_std_m=0.06,
-        target_noise_z_std_m=0.04,
+        target_dropout_prob=0.00,
+        target_outlier_prob=0.00,
+        target_stale_prob=0.0,
+        target_noise_xy_std_m=0.00,
+        target_noise_z_std_m=0.0,
 
-        wind_accel_xy_max_mps2=0.10,
+        wind_accel_xy_max_mps2=0.1,
         wind_accel_z_max_mps2=0.02,
-        ground_effect_gain= 0.02,
+        ground_effect_gain= 0.005,
         landing_descent_bias_mps=0.14,
 
 

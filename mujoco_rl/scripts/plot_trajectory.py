@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from stable_baselines3 import PPO
 
-from envs.landing_env import LandingEnv
+from envs.env_prototype import LandingEnv, LandingConfig
 
 
 OUT_DIR = "./runs/trajectory_plots"
