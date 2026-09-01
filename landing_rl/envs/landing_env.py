@@ -5,6 +5,8 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from landing_rl.controllers import BaselineController
+
 
 def wrap_pi(angle: float) -> float:
     """Wrap an angle to [-pi, pi]."""
@@ -262,6 +264,10 @@ class LandingEnv(gym.Env):
         super().__init__()
         self.cfg = config or LandingConfig()
 
+        # Phase 2: deterministic velocity-control arithmetic lives here now.
+        # The controller owns only cfg; it holds no episode state and no RNG.
+        self.controller = BaselineController(self.cfg)
+
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
@@ -469,59 +475,13 @@ class LandingEnv(gym.Env):
 
     # ------------------------------------------------------------------
     # Controller helpers
+    #
+    # Phase 2: _pid_velocity, _scale_action, and _limit_velocity_command were
+    # moved verbatim to landing_rl/controllers/baseline_controller.py as
+    # BaselineController.pid_velocity / scale_action / combine_and_limit.
+    # step() calls self.controller for those, plus apply_descent_gate for the
+    # descent gate #2 that used to be inline in step().
     # ------------------------------------------------------------------
-    def _pid_velocity(self, target: np.ndarray, valid: bool) -> np.ndarray:
-        if (not valid) and self.cfg.freeze_control_when_target_invalid:
-            return np.zeros(3, dtype=np.float64)
-
-        error = target - self.pos
-
-        vx = self.cfg.kp_xy * error[0] - self.cfg.kd_xy * self.vel[0]
-        vy = self.cfg.kp_xy * error[1] - self.cfg.kd_xy * self.vel[1]
-        vz = self.cfg.kp_z * error[2] - self.cfg.kd_z * self.vel[2]
-
-        vxy = np.array([vx, vy], dtype=np.float64)
-        norm_xy = float(np.linalg.norm(vxy))
-        if norm_xy > self.cfg.max_pid_xy_mps:
-            vxy *= self.cfg.max_pid_xy_mps / (norm_xy + 1e-9)
-
-        altitude_agl = self._altitude_agl()
-        xy_error = float(np.linalg.norm(error[:2]))
-
-        if (
-            xy_error < self.cfg.descent_xy_gate_m
-            and altitude_agl < self.cfg.descent_start_height_m
-            and altitude_agl > self.cfg.success_altitude_m
-        ):
-            vz = max(vz, self.cfg.landing_descent_bias_mps)
-
-        vz = float(np.clip(vz, -self.cfg.max_pid_z_mps, self.cfg.max_pid_z_mps))
-
-        return np.array([vxy[0], vxy[1], vz], dtype=np.float64)
-
-    def _scale_action(self, action: np.ndarray) -> np.ndarray:
-        action = np.asarray(action, dtype=np.float64)
-        action = np.clip(action, -1.0, 1.0)
-
-        return np.array(
-            [
-                action[0] * self.cfg.residual_xy_mps,
-                action[1] * self.cfg.residual_xy_mps,
-                action[2] * self.cfg.residual_z_mps,
-            ],
-            dtype=np.float64,
-        )
-
-    def _limit_velocity_command(self, v_cmd: np.ndarray) -> np.ndarray:
-        v_cmd = np.asarray(v_cmd, dtype=np.float64).copy()
-
-        vxy_norm = float(np.linalg.norm(v_cmd[:2]))
-        if vxy_norm > self.cfg.max_cmd_xy_mps:
-            v_cmd[:2] *= self.cfg.max_cmd_xy_mps / (vxy_norm + 1e-9)
-
-        v_cmd[2] = float(np.clip(v_cmd[2], -self.cfg.max_cmd_z_mps, self.cfg.max_cmd_z_mps))
-        return v_cmd
-
     def _apply_action_delay(self, raw_action: np.ndarray) -> np.ndarray:
         if self.action_delay_steps <= 0:
             return raw_action.copy()
@@ -1010,28 +970,31 @@ class LandingEnv(gym.Env):
 
         applied_action = self._apply_action_delay(raw_action)
 
-        v_pid = self._pid_velocity(control_target, control_target_valid)
+        v_pid = self.controller.pid_velocity(
+            control_target,
+            control_target_valid,
+            self.pos,
+            self.vel,
+            altitude_agl_before,
+        )
 
         if control_target_valid or self.cfg.apply_residual_when_target_invalid:
-            v_residual = self._scale_action(applied_action)
+            v_residual = self.controller.scale_action(applied_action)
         else:
             v_residual = np.zeros(3, dtype=np.float64)
 
-        v_cmd = self._limit_velocity_command(v_pid + v_residual)
+        v_cmd = self.controller.combine_and_limit(v_pid, v_residual)
 
         # 착륙 gate 안에서는 PPO residual이 PID의 하강 bias를 죽이지 못하게 함.
         # NED 기준 +z velocity = 아래로 하강.
-        if (
-            control_target_valid
-            and control_xy_error < self.cfg.descent_xy_gate_m
-            and altitude_agl_before < self.cfg.descent_start_height_m
-            and not self.ground_contact
-        ):
-            if altitude_agl_before < 0.10:
-                v_cmd[2] = max(v_cmd[2], 0.06)
-            else:
-                v_cmd[2] = max(v_cmd[2], self.cfg.landing_descent_bias_mps)
-    
+        v_cmd = self.controller.apply_descent_gate(
+            v_cmd,
+            control_target_valid,
+            control_xy_error,
+            altitude_agl_before,
+            self.ground_contact,
+        )
+
         self._update_rigid_body_dynamics(v_cmd, dt)
 
         # dynamics update 이후의 고도. reward 계산에는 이 값을 써야 함.
