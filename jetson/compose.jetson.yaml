@@ -6,14 +6,17 @@ services:
     container_name: microxrce-agent
     network_mode: host
     privileged: true
+    restart: unless-stopped
     volumes:
       - /dev:/dev
-    command: ["MicroXRCEAgent", "serial", "--dev", "/dev/ttyACM0", "-b", "921600"]
+    command: ["bash", "-lc", "MicroXRCEAgent serial --dev $${PX4_UXRCE_DEV:-/dev/ttyUSB0} -b $${PX4_UXRCE_BAUD:-921600}"]
     environment:
       - ROS_DOMAIN_ID=0
       - ROS_LOCALHOST_ONLY=0
       - RMW_IMPLEMENTATION=rmw_fastrtps_cpp
       - FASTDDS_BUILTIN_TRANSPORTS=UDPv4
+      - PX4_UXRCE_DEV=/dev/ttyUSB0
+      - PX4_UXRCE_BAUD=921600
 
   ros2-vision:
     build:
@@ -22,11 +25,13 @@ services:
     container_name: ros2-vision
     network_mode: host
     privileged: true
+    restart: unless-stopped
     depends_on:
       - microxrce-agent
     volumes:
       - ../ros2:/workspace/ros2
       - ../models:/workspace/ml_models
+      - ../jetson:/workspace/jetson
       - /dev:/dev
     working_dir: /workspace/ros2
     environment:
@@ -38,4 +43,4 @@ services:
       - YOLO_DEVICE=cuda
     stdin_open: true
     tty: true
-    command: bash
+    command: ["sleep", "infinity"]
