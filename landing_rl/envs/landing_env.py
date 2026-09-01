@@ -6,6 +6,7 @@ import numpy as np
 from gymnasium import spaces
 
 from landing_rl.controllers import BaselineController
+from landing_rl.disturbances import DisturbanceModel
 
 
 def wrap_pi(angle: float) -> float:
@@ -268,6 +269,11 @@ class LandingEnv(gym.Env):
         # The controller owns only cfg; it holds no episode state and no RNG.
         self.controller = BaselineController(self.cfg)
 
+        # Phase 3: per-episode constant wind lives here now. Owns only cfg and
+        # the wind vector; holds no RNG. self.wind_accel stays a view of the
+        # model's canonical vector (never a second, independent vector).
+        self.disturbance = DisturbanceModel(self.cfg)
+
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
@@ -328,7 +334,7 @@ class LandingEnv(gym.Env):
         self.attitude_response_alpha = np.ones(2, dtype=np.float64) * 0.40  # kept for backward-compatible info fields
         self.body_rate_response_alpha = np.ones(3, dtype=np.float64) * 0.40
         self.thrust_response_alpha = 0.30
-        self.wind_accel = np.zeros(3, dtype=np.float64)
+        self.wind_accel = self.disturbance.wind_accel  # canonical vector, shared
         self.action_delay_steps = 0      #2
         self.obs_delay_steps = 2
 
@@ -916,23 +922,9 @@ class LandingEnv(gym.Env):
             self.cfg.thrust_response_alpha_max,
         ))
 
-        self.wind_accel = np.array(
-            [
-                self.np_random.uniform(
-                    -self.cfg.wind_accel_xy_max_mps2,
-                    self.cfg.wind_accel_xy_max_mps2,
-                ),
-                self.np_random.uniform(
-                    -self.cfg.wind_accel_xy_max_mps2,
-                    self.cfg.wind_accel_xy_max_mps2,
-                ),
-                self.np_random.uniform(
-                    -self.cfg.wind_accel_z_max_mps2,
-                    self.cfg.wind_accel_z_max_mps2,
-                ),
-            ],
-            dtype=np.float64,
-        )
+        # Phase 3: same three scalar np_random.uniform draws (x, y, z order,
+        # same bounds), at the same point in the reset RNG sequence.
+        self.wind_accel = self.disturbance.reset(self.np_random)
 
         # Initialize target measurement pipeline with one clean-ish measurement.
         self.last_raw_target = self.target_true.copy()
