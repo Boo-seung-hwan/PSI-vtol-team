@@ -7,6 +7,7 @@ from gymnasium import spaces
 
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
+from landing_rl.dynamics import ResponseAlphas
 from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.loop_timing import LoopTiming
 from landing_rl.perception import ObsLatency, TargetMeasurementModel
@@ -300,6 +301,14 @@ class LandingEnv(gym.Env):
         # draw in env reset, kept AFTER action_latency.reset. self.obs_delay_steps
         # / self.target_queue stay env attributes, aliased to this helper.
         self.obs_latency = ObsLatency(self.cfg)
+
+        # Phase 8: the four per-episode response-alpha draws (vel, attitude,
+        # body_rate, thrust) live here now. Owns only cfg + the four alpha
+        # fields; holds no RNG. reset() consumes four np_random.uniform(...)
+        # draws in that order. self.*_response_alpha stay env attributes,
+        # aliased to this component after reset(). vel_/attitude_response_alpha
+        # are info-only but remain part of the frozen RNG stream.
+        self.response_alphas = ResponseAlphas(self.cfg)
 
         self.action_space = spaces.Box(
             low=-1.0,
@@ -886,27 +895,18 @@ class LandingEnv(gym.Env):
         self.action_queue = self.action_latency.action_queue
         self.target_queue = self.obs_latency.target_queue
 
-        self.vel_response_alpha = self.np_random.uniform(
-            self.cfg.vel_response_alpha_min,
-            self.cfg.vel_response_alpha_max,
-            size=3,
-        ).astype(np.float64)
-
-        self.attitude_response_alpha = self.np_random.uniform(
-            self.cfg.attitude_response_alpha_min,
-            self.cfg.attitude_response_alpha_max,
-            size=2,
-        ).astype(np.float64)
-
-        self.body_rate_response_alpha = self.np_random.uniform(
-            self.cfg.body_rate_response_alpha_min,
-            self.cfg.body_rate_response_alpha_max,
-            size=3,
-        ).astype(np.float64)
-        self.thrust_response_alpha = float(self.np_random.uniform(
-            self.cfg.thrust_response_alpha_min,
-            self.cfg.thrust_response_alpha_max,
-        ))
+        # Phase 8: the four per-episode response-alpha draws live in
+        # ResponseAlphas now -- same four np_random.uniform(...) calls in the
+        # same order (vel, attitude, body_rate, thrust), same bounds / sizes /
+        # .astype(float64) / float(...), at the same point in the reset RNG
+        # sequence (after ObsLatency.reset, before DisturbanceModel.reset).
+        # vel_/attitude_response_alpha are info-only but MUST still be sampled.
+        # self.*_response_alpha stay env attributes aliased to the component.
+        self.response_alphas.reset(self.np_random)
+        self.vel_response_alpha = self.response_alphas.vel_response_alpha
+        self.attitude_response_alpha = self.response_alphas.attitude_response_alpha
+        self.body_rate_response_alpha = self.response_alphas.body_rate_response_alpha
+        self.thrust_response_alpha = self.response_alphas.thrust_response_alpha
 
         # Phase 3: same three scalar np_random.uniform draws (x, y, z order,
         # same bounds), at the same point in the reset RNG sequence.
