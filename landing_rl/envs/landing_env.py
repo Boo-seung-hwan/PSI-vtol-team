@@ -9,7 +9,7 @@ from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
 from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.loop_timing import LoopTiming
-from landing_rl.perception import TargetMeasurementModel
+from landing_rl.perception import ObsLatency, TargetMeasurementModel
 
 
 def wrap_pi(angle: float) -> float:
@@ -290,9 +290,16 @@ class LandingEnv(gym.Env):
         # Phase 6: the raw target-measurement stochastic model (dropout / stale /
         # noise / outlier) lives here now. Owns only cfg and last_raw_target;
         # holds no RNG. sample() takes np_random and has data-dependent draw
-        # counts. The obs-delay queue stays in this env. self.last_raw_target is
-        # kept as a compatibility mirror of the model's canonical value.
+        # counts. self.last_raw_target is kept as a compatibility mirror of the
+        # model's canonical value.
         self.target_measurement_model = TargetMeasurementModel(self.cfg)
+
+        # Phase 7: the target observation-delay state + FIFO queue live here now.
+        # Owns only cfg, obs_delay_steps, and target_queue; holds no RNG.
+        # reset() consumes one np_random.integers(...) draw -- the SECOND integer
+        # draw in env reset, kept AFTER action_latency.reset. self.obs_delay_steps
+        # / self.target_queue stay env attributes, aliased to this helper.
+        self.obs_latency = ObsLatency(self.cfg)
 
         self.action_space = spaces.Box(
             low=-1.0,
@@ -388,8 +395,10 @@ class LandingEnv(gym.Env):
     #
     # Phase 6: _sample_raw_target_measurement was moved verbatim to
     # landing_rl/perception/target_measurement.py as
-    # TargetMeasurementModel.sample(rng, target_true). _update_target_pipeline
-    # calls it below; the obs-delay queue mechanics stay here unchanged.
+    # TargetMeasurementModel.sample(rng, target_true).
+    # Phase 7: the obs-delay queue block was moved verbatim to
+    # landing_rl/perception/obs_latency.py as ObsLatency.push_and_get.
+    # _update_target_pipeline stays as the orchestration seam below.
     # ------------------------------------------------------------------
 
     def _update_target_pipeline(self) -> None:
@@ -405,13 +414,9 @@ class LandingEnv(gym.Env):
         # observable point; see target_measurement.py).
         self.last_raw_target = self.target_measurement_model.last_raw_target
 
-        self.target_queue.append((raw_target.copy(), bool(valid), mode))
-
-        max_len = max(1, int(self.obs_delay_steps) + 1)
-        while len(self.target_queue) > max_len:
-            self.target_queue.pop(0)
-
-        delayed_target, delayed_valid, delayed_mode = self.target_queue[0]
+        delayed_target, delayed_valid, delayed_mode = self.obs_latency.push_and_get(
+            raw_target, valid, mode
+        )
 
         self.target_measured = delayed_target.copy()
         self.obs_target = delayed_target.copy()
@@ -870,21 +875,16 @@ class LandingEnv(gym.Env):
 
         self.prev_potential = self._potential()
 
-        # Phase 5: action-delay sampling + FIFO init live in ActionLatency now.
-        # reset() consumes exactly one np_random.integers(...) draw, in the same
-        # position as before -- BEFORE the obs_delay_steps draw, which stays
-        # here. self.action_delay_steps / self.action_queue remain env
-        # attributes, aliased to the helper's canonical objects.
+        # Phase 5/7: the two delay draws stay in this exact order --
+        # action_delay_steps FIRST (ActionLatency), obs_delay_steps SECOND
+        # (ObsLatency) -- each one np_random.integers(...) call, never merged or
+        # vectorized. self.action_queue / self.target_queue / self.action_delay_steps
+        # / self.obs_delay_steps remain env attributes aliased to the helpers.
         self.action_delay_steps = self.action_latency.reset(self.np_random)
-        self.obs_delay_steps = int(
-            self.np_random.integers(
-                self.cfg.obs_delay_steps_min,
-                self.cfg.obs_delay_steps_max + 1,
-            )
-        )
+        self.obs_delay_steps = self.obs_latency.reset(self.np_random)
 
         self.action_queue = self.action_latency.action_queue
-        self.target_queue = []
+        self.target_queue = self.obs_latency.target_queue
 
         self.vel_response_alpha = self.np_random.uniform(
             self.cfg.vel_response_alpha_min,
