@@ -7,6 +7,7 @@ from gymnasium import spaces
 
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
+from landing_rl.envs.loop_timing import LoopTiming
 
 
 def wrap_pi(angle: float) -> float:
@@ -274,6 +275,10 @@ class LandingEnv(gym.Env):
         # model's canonical vector (never a second, independent vector).
         self.disturbance = DisturbanceModel(self.cfg)
 
+        # Phase 4: control-step dt sampling lives here now. Owns only cfg;
+        # holds no RNG and no clock/episode state. step() decides when to call.
+        self.loop_timing = LoopTiming(self.cfg)
+
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
@@ -361,11 +366,11 @@ class LandingEnv(gym.Env):
 
     # ------------------------------------------------------------------
     # Sampling helpers
+    #
+    # Phase 4: _sample_dt was moved verbatim to
+    # landing_rl/envs/loop_timing.py as LoopTiming.sample_dt(rng). step() calls
+    # self.loop_timing.sample_dt(self.np_random) at the same point.
     # ------------------------------------------------------------------
-    def _sample_dt(self) -> float:
-        dt = self.cfg.dt + self.np_random.normal(0.0, self.cfg.dt_jitter_std)
-        return float(np.clip(dt, self.cfg.dt_min, self.cfg.dt_max))
-
     def _sample_raw_target_measurement(self) -> tuple[np.ndarray, bool, str]:
         """Sample a raw absolute NED target measurement.
 
@@ -949,7 +954,7 @@ class LandingEnv(gym.Env):
         action_delta = raw_action - old_action
         self.prev_action = raw_action.copy()
 
-        dt = self._sample_dt()
+        dt = self.loop_timing.sample_dt(self.np_random)
 
         # The action was selected from the current observation.
         # Therefore both PID and residual RL use the currently stored delayed target.
