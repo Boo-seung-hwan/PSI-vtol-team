@@ -11,7 +11,11 @@ from landing_rl.dynamics import ResponseAlphas
 from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.initial_state import InitialStateSampler
 from landing_rl.envs.loop_timing import LoopTiming
-from landing_rl.perception import ObsLatency, TargetMeasurementModel
+from landing_rl.perception import (
+    ObsLatency,
+    ObservationNoiseSampler,
+    TargetMeasurementModel,
+)
 
 
 def wrap_pi(angle: float) -> float:
@@ -303,6 +307,13 @@ class LandingEnv(gym.Env):
         # / self.target_queue stay env attributes, aliased to this helper.
         self.obs_latency = ObsLatency(self.cfg)
 
+        # Phase 10: the three per-_get_obs() observation-noise draws (velocity,
+        # acceleration, attitude) live here now. Owns only cfg; keeps no noise
+        # and no RNG. sample() consumes three np_random.normal(0.0, std, size=3)
+        # draws in that order, still only from _get_obs(). All deterministic
+        # observation assembly stays in _get_obs().
+        self.observation_noise = ObservationNoiseSampler(self.cfg)
+
         # Phase 8: the four per-episode response-alpha draws (vel, attitude,
         # body_rate, thrust) live here now. Owns only cfg + the four alpha
         # fields; holds no RNG. reset() consumes four np_random.uniform(...)
@@ -446,17 +457,19 @@ class LandingEnv(gym.Env):
     def _get_obs(self) -> np.ndarray:
         error_obs = self.obs_target - self.pos
 
-        vel_obs = self.vel + self.np_random.normal(
-            0.0,
-            self.cfg.velocity_obs_noise_std_mps,
-            size=3,
+        # Phase 10: the three observation-noise draws live in
+        # ObservationNoiseSampler now -- same three np_random.normal(0.0, std,
+        # size=3) calls in the same order (velocity, acceleration, attitude).
+        # Only the deterministic transforms below stay in _get_obs. Folding the
+        # draws to one call here is RNG-neutral: the np.clip and attitude_obs
+        # construction between the legacy draws consume no RNG.
+        vel_noise, accel_noise, attitude_noise = self.observation_noise.sample(
+            self.np_random
         )
 
-        accel_obs = self.accel + self.np_random.normal(
-            0.0,
-            self.cfg.acceleration_obs_noise_std_mps2,
-            size=3,
-        )
+        vel_obs = self.vel + vel_noise
+
+        accel_obs = self.accel + accel_noise
         accel_obs = np.clip(
             accel_obs,
             -self.cfg.max_acceleration_obs_mps2,
@@ -471,11 +484,7 @@ class LandingEnv(gym.Env):
             ],
             dtype=np.float64,
         )
-        attitude_obs += self.np_random.normal(
-            0.0,
-            self.cfg.attitude_obs_noise_std_rad,
-            size=3,
-        )
+        attitude_obs += attitude_noise
         attitude_obs[2] = wrap_pi(float(attitude_obs[2]))
 
         valid = 1.0 if self.obs_target_valid else 0.0
