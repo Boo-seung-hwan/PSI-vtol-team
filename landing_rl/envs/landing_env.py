@@ -9,6 +9,7 @@ from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
 from landing_rl.dynamics import ResponseAlphas
 from landing_rl.envs.action_latency import ActionLatency
+from landing_rl.envs.initial_state import InitialStateSampler
 from landing_rl.envs.loop_timing import LoopTiming
 from landing_rl.perception import ObsLatency, TargetMeasurementModel
 
@@ -309,6 +310,13 @@ class LandingEnv(gym.Env):
         # aliased to this component after reset(). vel_/attitude_response_alpha
         # are info-only but remain part of the frozen RNG stream.
         self.response_alphas = ResponseAlphas(self.cfg)
+
+        # Phase 9: the randomized initial (pos, vel, attitude) draws live here
+        # now. Owns only cfg; keeps no pos/vel/attitude/RNG. sample() consumes
+        # seven np_random.uniform(...) draws (x, y, altitude, vel size=3, roll,
+        # pitch, yaw) at the TOP of reset(). LandingEnv still owns self.pos /
+        # self.vel / self.attitude and all deterministic reset assignments.
+        self.initial_state_sampler = InitialStateSampler(self.cfg)
 
         self.action_space = spaces.Box(
             low=-1.0,
@@ -831,43 +839,23 @@ class LandingEnv(gym.Env):
 
         self.step_count = 0
 
-        x = self.np_random.uniform(-self.cfg.init_xy_range_m, self.cfg.init_xy_range_m)
-        y = self.np_random.uniform(-self.cfg.init_xy_range_m, self.cfg.init_xy_range_m)
-        altitude = self.np_random.uniform(
-            self.cfg.init_altitude_min_m,
-            self.cfg.init_altitude_max_m,
-        )
-        z = -altitude
-
-        self.pos = np.array([x, y, z], dtype=np.float64)
-        self.vel = self.np_random.uniform(
-            -self.cfg.init_vel_range_mps,
-            self.cfg.init_vel_range_mps,
-            size=3,
-        ).astype(np.float64)
+        # Phase 9: the seven randomized initial-state draws live in
+        # InitialStateSampler now -- same order (x, y, altitude, vel size=3,
+        # roll, pitch, yaw), same bounds / size / dtype / z = -altitude NED
+        # mapping, at this same point in the reset RNG sequence (the very first
+        # draws of reset). The deterministic zero/const assignments between the
+        # legacy velocity draw and attitude draws (accel, prev_accel,
+        # prev_action, target_yaw) consume no RNG and stay in this env.
+        pos, vel, attitude = self.initial_state_sampler.sample(self.np_random)
+        self.pos = pos
+        self.vel = vel
         self.accel = np.zeros(3, dtype=np.float64)
         self.prev_accel = np.zeros(3, dtype=np.float64)
 
         self.prev_action = np.zeros(3, dtype=np.float64)
 
         self.target_yaw = float(self.cfg.target_yaw_rad)
-        self.attitude = np.array(
-            [
-                self.np_random.uniform(
-                    -self.cfg.init_roll_pitch_range_rad,
-                    self.cfg.init_roll_pitch_range_rad,
-                ),
-                self.np_random.uniform(
-                    -self.cfg.init_roll_pitch_range_rad,
-                    self.cfg.init_roll_pitch_range_rad,
-                ),
-                self.np_random.uniform(
-                    -self.cfg.init_yaw_range_rad,
-                    self.cfg.init_yaw_range_rad,
-                ),
-            ],
-            dtype=np.float64,
-        )
+        self.attitude = attitude
         self.yaw_rate = 0.0
         self.body_rates = np.zeros(3, dtype=np.float64)
         self.thrust_accel = float(self.cfg.gravity_mps2)
