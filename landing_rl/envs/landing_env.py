@@ -9,6 +9,7 @@ from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
 from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.loop_timing import LoopTiming
+from landing_rl.perception import TargetMeasurementModel
 
 
 def wrap_pi(angle: float) -> float:
@@ -286,6 +287,13 @@ class LandingEnv(gym.Env):
         # stay env attributes, aliased to this helper's objects after reset().
         self.action_latency = ActionLatency(self.cfg)
 
+        # Phase 6: the raw target-measurement stochastic model (dropout / stale /
+        # noise / outlier) lives here now. Owns only cfg and last_raw_target;
+        # holds no RNG. sample() takes np_random and has data-dependent draw
+        # counts. The obs-delay queue stays in this env. self.last_raw_target is
+        # kept as a compatibility mirror of the model's canonical value.
+        self.target_measurement_model = TargetMeasurementModel(self.cfg)
+
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
@@ -377,53 +385,25 @@ class LandingEnv(gym.Env):
     # Phase 4: _sample_dt was moved verbatim to
     # landing_rl/envs/loop_timing.py as LoopTiming.sample_dt(rng). step() calls
     # self.loop_timing.sample_dt(self.np_random) at the same point.
+    #
+    # Phase 6: _sample_raw_target_measurement was moved verbatim to
+    # landing_rl/perception/target_measurement.py as
+    # TargetMeasurementModel.sample(rng, target_true). _update_target_pipeline
+    # calls it below; the obs-delay queue mechanics stay here unchanged.
     # ------------------------------------------------------------------
-    def _sample_raw_target_measurement(self) -> tuple[np.ndarray, bool, str]:
-        """Sample a raw absolute NED target measurement.
-
-        Returns:
-            target: absolute NED target measurement
-            valid: target valid flag
-            mode:  string label for debugging/logging
-        """
-        # Dropout: detection failed. Keep the previous target value but mark invalid.
-        if self.np_random.random() < self.cfg.target_dropout_prob:
-            return self.last_raw_target.copy(), False, "dropout"
-
-        # Stale target: old measurement is repeated but still marked valid.
-        if self.np_random.random() < self.cfg.target_stale_prob:
-            return self.last_raw_target.copy(), True, "stale"
-
-        noise = np.array(
-            [
-                self.np_random.normal(0.0, self.cfg.target_noise_xy_std_m),
-                self.np_random.normal(0.0, self.cfg.target_noise_xy_std_m),
-                self.np_random.normal(0.0, self.cfg.target_noise_z_std_m),
-            ],
-            dtype=np.float64,
-        )
-
-        noise_norm = float(np.linalg.norm(noise))
-        if noise_norm > self.cfg.target_noise_max_m:
-            noise *= self.cfg.target_noise_max_m / (noise_norm + 1e-9)
-
-        target = self.target_true + noise
-        mode = "normal"
-
-        if self.np_random.random() < self.cfg.target_outlier_prob:
-            target[:2] += self.np_random.uniform(
-                -self.cfg.target_outlier_xy_m,
-                self.cfg.target_outlier_xy_m,
-                size=2,
-            )
-            mode = "outlier"
-
-        self.last_raw_target = target.copy()
-        return target, True, mode
 
     def _update_target_pipeline(self) -> None:
         """Apply perception measurement model and observation delay queue."""
-        raw_target, valid, mode = self._sample_raw_target_measurement()
+        raw_target, valid, mode = self.target_measurement_model.sample(
+            self.np_random,
+            self.target_true,
+        )
+        # Compatibility mirror: keep env.last_raw_target equal to the model's
+        # canonical value. The legacy code reassigns (not mutates)
+        # last_raw_target on the normal/outlier path, so this re-alias after
+        # every sample keeps the two in lockstep (identity holds at every
+        # observable point; see target_measurement.py).
+        self.last_raw_target = self.target_measurement_model.last_raw_target
 
         self.target_queue.append((raw_target.copy(), bool(valid), mode))
 
@@ -933,7 +913,10 @@ class LandingEnv(gym.Env):
         self.wind_accel = self.disturbance.reset(self.np_random)
 
         # Initialize target measurement pipeline with one clean-ish measurement.
-        self.last_raw_target = self.target_true.copy()
+        # Phase 6: the measurement history lives in target_measurement_model now;
+        # reset() consumes no RNG. self.last_raw_target stays a mirror of it.
+        self.target_measurement_model.reset(self.target_true)
+        self.last_raw_target = self.target_measurement_model.last_raw_target
         self.obs_target = self.target_true.copy()
         self.obs_target_valid = True
         self.obs_target_mode = "reset"
