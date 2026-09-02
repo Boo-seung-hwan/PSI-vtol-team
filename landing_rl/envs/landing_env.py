@@ -7,6 +7,7 @@ from gymnasium import spaces
 
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
+from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.loop_timing import LoopTiming
 
 
@@ -279,6 +280,12 @@ class LandingEnv(gym.Env):
         # holds no RNG and no clock/episode state. step() decides when to call.
         self.loop_timing = LoopTiming(self.cfg)
 
+        # Phase 5: action-path (command) latency lives here now. Owns only cfg,
+        # action_delay_steps, and the FIFO. Holds no RNG; reset() consumes one
+        # np_random.integers(...) draw. self.action_delay_steps / self.action_queue
+        # stay env attributes, aliased to this helper's objects after reset().
+        self.action_latency = ActionLatency(self.cfg)
+
         self.action_space = spaces.Box(
             low=-1.0,
             high=1.0,
@@ -493,12 +500,9 @@ class LandingEnv(gym.Env):
     # step() calls self.controller for those, plus apply_descent_gate for the
     # descent gate #2 that used to be inline in step().
     # ------------------------------------------------------------------
-    def _apply_action_delay(self, raw_action: np.ndarray) -> np.ndarray:
-        if self.action_delay_steps <= 0:
-            return raw_action.copy()
-
-        self.action_queue.append(raw_action.copy())
-        return self.action_queue.pop(0)
+    # Phase 5: _apply_action_delay was moved verbatim to
+    # landing_rl/envs/action_latency.py as ActionLatency.apply. step() calls
+    # self.action_latency.apply(raw_action) at the identical location.
 
     def _altitude_agl(self) -> float:
         """Altitude above ground in meters. In NED, negative z is above ground."""
@@ -886,12 +890,12 @@ class LandingEnv(gym.Env):
 
         self.prev_potential = self._potential()
 
-        self.action_delay_steps = int(
-            self.np_random.integers(
-                self.cfg.action_delay_steps_min,
-                self.cfg.action_delay_steps_max + 1,
-            )
-        )
+        # Phase 5: action-delay sampling + FIFO init live in ActionLatency now.
+        # reset() consumes exactly one np_random.integers(...) draw, in the same
+        # position as before -- BEFORE the obs_delay_steps draw, which stays
+        # here. self.action_delay_steps / self.action_queue remain env
+        # attributes, aliased to the helper's canonical objects.
+        self.action_delay_steps = self.action_latency.reset(self.np_random)
         self.obs_delay_steps = int(
             self.np_random.integers(
                 self.cfg.obs_delay_steps_min,
@@ -899,10 +903,7 @@ class LandingEnv(gym.Env):
             )
         )
 
-        self.action_queue = [
-            np.zeros(3, dtype=np.float64)
-            for _ in range(max(0, self.action_delay_steps))
-        ]
+        self.action_queue = self.action_latency.action_queue
         self.target_queue = []
 
         self.vel_response_alpha = self.np_random.uniform(
@@ -965,7 +966,7 @@ class LandingEnv(gym.Env):
         control_error = control_target - self.pos
         control_xy_error = float(np.linalg.norm(control_error[:2]))
 
-        applied_action = self._apply_action_delay(raw_action)
+        applied_action = self.action_latency.apply(raw_action)
 
         v_pid = self.controller.pid_velocity(
             control_target,
