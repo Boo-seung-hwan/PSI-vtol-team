@@ -7,7 +7,7 @@ from gymnasium import spaces
 
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
-from landing_rl.dynamics import ResponseAlphas
+from landing_rl.dynamics import ProcessNoiseSampler, ResponseAlphas
 from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.initial_state import InitialStateSampler
 from landing_rl.envs.loop_timing import LoopTiming
@@ -321,6 +321,13 @@ class LandingEnv(gym.Env):
         # aliased to this component after reset(). vel_/attitude_response_alpha
         # are info-only but remain part of the frozen RNG stream.
         self.response_alphas = ResponseAlphas(self.cfg)
+
+        # Phase 11: the three in-step process-noise draws (body-rate, thrust,
+        # translational) live here now. Owns only cfg; keeps no noise, no RNG,
+        # no dt/noise_scale. Called from _update_rigid_body_dynamics() via three
+        # explicit methods at their original separated call sites. noise_scale
+        # is still computed in that method and passed in.
+        self.process_noise = ProcessNoiseSampler(self.cfg)
 
         # Phase 9: the randomized initial (pos, vel, attitude) draws live here
         # now. Owns only cfg; keeps no pos/vel/attitude/RNG. sample() consumes
@@ -766,10 +773,10 @@ class LandingEnv(gym.Env):
         self.body_rates = self.body_rates + rate_alpha_eff * (rate_cmd - self.body_rates)
 
         noise_scale = math.sqrt(dt_safe / max(self.cfg.dt, 1e-6))
-        self.body_rates += self.np_random.normal(
-            0.0,
-            self.cfg.body_rate_process_noise_std_radps * noise_scale,
-            size=3,
+        # Phase 11: body-rate process noise (draw 1 of 3). Verbatim expression;
+        # noise_scale stays computed here.
+        self.body_rates += self.process_noise.sample_body_rate(
+            self.np_random, noise_scale
         )
 
         self.attitude[0] = float(np.clip(
@@ -793,7 +800,7 @@ class LandingEnv(gym.Env):
         self.thrust_accel = float(
             self.thrust_accel
             + thrust_alpha_eff * (thrust_sp - self.thrust_accel)
-            + self.np_random.normal(0.0, self.cfg.thrust_process_noise_std_mps2 * noise_scale)
+            + self.process_noise.sample_thrust(self.np_random, noise_scale)  # draw 2 of 3 (scalar)
         )
         thrust_min = (
             float(self.cfg.motor_cutoff_thrust_accel_mps2)
@@ -822,10 +829,9 @@ class LandingEnv(gym.Env):
             ],
             dtype=np.float64,
         )
-        process_accel_noise = self.np_random.normal(
-            0.0,
-            self.cfg.process_noise_vel_std_mps * noise_scale / max(dt_safe, 1e-6),
-            size=3,
+        # Phase 11: translational-acceleration process noise (draw 3 of 3).
+        process_accel_noise = self.process_noise.sample_translational_accel(
+            self.np_random, noise_scale, dt_safe
         )
 
         self.prev_accel = self.accel.copy()
