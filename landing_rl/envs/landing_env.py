@@ -8,7 +8,12 @@ from gymnasium import spaces
 from landing_rl.contact import ContactModel
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
-from landing_rl.dynamics import ProcessNoiseSampler, ResponseAlphas
+from landing_rl.dynamics import (
+    LegacyVehicleDynamics,
+    ProcessNoiseSampler,
+    ResponseAlphas,
+    VehicleState,
+)
 from landing_rl.envs.action_latency import ActionLatency
 from landing_rl.envs.initial_state import InitialStateSampler
 from landing_rl.envs.loop_timing import LoopTiming
@@ -330,6 +335,17 @@ class LandingEnv(gym.Env):
         # is still computed in that method and passed in.
         self.process_noise = ProcessNoiseSampler(self.cfg)
 
+        # Phase 13C-1: the free-flight / PX4-proxy rigid-body integration
+        # (D4-D25 of _update_rigid_body_dynamics) lives here now. Owns only cfg
+        # and the shared ProcessNoiseSampler; holds no RNG, no VehicleState, no
+        # ContactModel, no env reference, no wind / alpha / target state. Its
+        # advance_free_flight(state, ...) mutates the canonical VehicleState in
+        # place and takes self.np_random + explicit scalar/bool inputs. The D2
+        # contact.begin_step(), the vel_before snapshot, the D26
+        # ContactModel.apply(), and the D27 post-contact accel recompute all
+        # stay in _update_rigid_body_dynamics below (no PlantModel yet).
+        self.legacy_dynamics = LegacyVehicleDynamics(self.cfg, self.process_noise)
+
         # Phase 13B: the legacy ground-contact logic + contact bookkeeping live
         # here now. Owns only cfg, a ContactState (four persistent fields:
         # ground_contact / contact_count / bounce_count / motor_cutoff) and a
@@ -380,21 +396,33 @@ class LandingEnv(gym.Env):
         self.target_measured = np.zeros(3, dtype=np.float64)
         self.last_raw_target = np.zeros(3, dtype=np.float64)
 
-        self.pos = np.zeros(3, dtype=np.float64)
-        self.vel = np.zeros(3, dtype=np.float64)
-        self.accel = np.zeros(3, dtype=np.float64)
-        self.prev_accel = np.zeros(3, dtype=np.float64)
-
-        # attitude = [roll, pitch, yaw] in radians.
-        # roll/pitch are coupled to lateral acceleration demand; yaw tracks target_yaw.
-        self.attitude = np.zeros(3, dtype=np.float64)
+        # Phase 13C-1: the canonical vehicle-dynamics state is a VehicleState
+        # now (the 12 physical/dynamics fields: pos / vel / accel / prev_accel /
+        # attitude / yaw_rate / body_rates / thrust_accel / attitude_setpoint /
+        # thrust_accel_setpoint / accel_cmd / ground_effect_factor). The flat
+        # self.* attributes for those fields are compatibility MIRRORS kept in
+        # sync by _sync_vehicle_state_compatibility_fields(): for the ndarray
+        # fields the mirror shares object identity with the VehicleState array
+        # (rebound on every sync); the scalar fields are value copies. reward /
+        # observation / info / the regression comparators keep reading the flat
+        # self.* mirrors. target_yaw is NOT vehicle state -- it stays an env
+        # attribute (yaw tracks target_yaw; roll/pitch couple to lateral accel).
         self.target_yaw = float(self.cfg.target_yaw_rad)
-        self.yaw_rate = 0.0
-        self.body_rates = np.zeros(3, dtype=np.float64)  # [p, q, r] proxy [rad/s]
-        self.thrust_accel = float(self.cfg.gravity_mps2)  # collective thrust per mass [m/s^2]
-        self.attitude_setpoint = np.zeros(3, dtype=np.float64)
-        self.thrust_accel_setpoint = float(self.cfg.gravity_mps2)
-        self.accel_cmd = np.zeros(3, dtype=np.float64)
+        self._vehicle_state = VehicleState(
+            pos=np.zeros(3, dtype=np.float64),
+            vel=np.zeros(3, dtype=np.float64),
+            accel=np.zeros(3, dtype=np.float64),
+            prev_accel=np.zeros(3, dtype=np.float64),
+            attitude=np.zeros(3, dtype=np.float64),
+            yaw_rate=0.0,
+            body_rates=np.zeros(3, dtype=np.float64),  # [p, q, r] proxy [rad/s]
+            thrust_accel=float(self.cfg.gravity_mps2),  # collective thrust per mass
+            attitude_setpoint=np.zeros(3, dtype=np.float64),
+            thrust_accel_setpoint=float(self.cfg.gravity_mps2),
+            accel_cmd=np.zeros(3, dtype=np.float64),
+            ground_effect_factor=1.0,
+        )
+        self._sync_vehicle_state_compatibility_fields()
 
         self.prev_action = np.zeros(3, dtype=np.float64)
         self.prev_potential = 0.0
@@ -420,10 +448,8 @@ class LandingEnv(gym.Env):
         # Landing-contact state. Canonical owner is self.contact (ContactModel);
         # ContactState / ContactResult already hold the legacy default values,
         # so this just mirrors them onto the flat env attributes that reward /
-        # info / the comparators read. ground_effect_factor is env-owned (not
-        # contact state) and is set explicitly. Reset every episode and updated
-        # by the contact model after position integration.
-        self.ground_effect_factor = 1.0
+        # info / the comparators read. (ground_effect_factor is a VehicleState
+        # field now and is already mirrored by the vehicle-state sync above.)
         self._sync_contact_compatibility_fields()
 
     # ------------------------------------------------------------------
@@ -539,17 +565,36 @@ class LandingEnv(gym.Env):
 
         return -(1.0 * xy + 0.6 * z + 0.15 * speed)
 
-    def _compute_ground_effect_factor(self) -> float:
-        """Return thrust multiplier caused by ground effect near the pad."""
-        h = self._altitude_agl()
-        height = max(float(self.cfg.ground_effect_height_m), 1e-6)
+    def _sync_vehicle_state_compatibility_fields(self) -> None:
+        """Mirror the canonical ``VehicleState`` onto the flat LandingEnv
+        attributes that reward / observation / info / the regression comparators
+        read.
 
-        if h >= height or self.ground_contact:
-            return 1.0
-
-        closeness = 1.0 - h / height
-        factor = 1.0 + float(self.cfg.ground_effect_gain) * closeness * closeness
-        return float(np.clip(factor, 1.0, self.cfg.ground_effect_max_factor))
+        Contract: for the eight ndarray fields the flat attribute is rebound to
+        the SAME array object held by ``self._vehicle_state`` (object identity is
+        preserved at every point where reward / obs / info read them -- i.e.
+        after ``reset()`` and after each full ``_update_rigid_body_dynamics``
+        call). ``LegacyVehicleDynamics.advance_free_flight`` rebinds
+        ``state.vel`` / ``pos`` / ``accel`` / ``prev_accel`` / ``body_rates`` /
+        ``attitude_setpoint`` / ``accel_cmd`` to fresh arrays, so this must be
+        re-run after it (and again after the D27 accel recompute). The four
+        scalar fields (``yaw_rate``, ``thrust_accel``, ``thrust_accel_setpoint``,
+        ``ground_effect_factor``) are value copies. ``self._vehicle_state`` is
+        canonical.
+        """
+        st = self._vehicle_state
+        self.pos = st.pos
+        self.vel = st.vel
+        self.accel = st.accel
+        self.prev_accel = st.prev_accel
+        self.attitude = st.attitude
+        self.body_rates = st.body_rates
+        self.attitude_setpoint = st.attitude_setpoint
+        self.accel_cmd = st.accel_cmd
+        self.yaw_rate = st.yaw_rate
+        self.thrust_accel = st.thrust_accel
+        self.thrust_accel_setpoint = st.thrust_accel_setpoint
+        self.ground_effect_factor = st.ground_effect_factor
 
     def _sync_contact_compatibility_fields(self) -> None:
         """Mirror ContactModel's canonical state/result onto the flat LandingEnv
@@ -579,244 +624,86 @@ class LandingEnv(gym.Env):
         self.last_bounce_speed = r.last_bounce_speed
 
     def _apply_ground_contact(self, vel_before_step: np.ndarray) -> None:
-        """Resolve simple ground contact and bounce at z=ground_z_m.
+        """Resolve simple ground contact and bounce at z=ground_z_m (D26 seam).
 
-        Phase 13B: the actual logic lives in ``ContactModel.apply`` now. This
-        method is kept as the D26 call seam (its exact location between the
-        provisional position integration and the post-contact acceleration
-        recompute is part of the frozen execution topology). ``self.pos`` /
-        ``self.vel`` / ``self.attitude`` are handed in by reference and mutated
-        in place exactly as before; the scalar thrust values are returned and
-        written back here; the contact compatibility mirrors are re-synced.
+        Phase 13B: the logic lives in ``ContactModel.apply``. Phase 13C-1: it
+        now operates on the canonical ``VehicleState`` -- ``self._vehicle_state``
+        ``pos`` / ``vel`` / ``attitude`` are handed in by reference and mutated
+        in place; the scalar thrust values are returned and written back onto the
+        VehicleState here. This method is kept as the named D26 call seam: its
+        exact location between the provisional position integration
+        (``advance_free_flight``) and the post-contact acceleration recompute
+        (D27) is part of the frozen execution topology. Contact and vehicle
+        compatibility mirrors are re-synced afterwards.
         """
+        st = self._vehicle_state
         result, thrust_accel, thrust_accel_setpoint = self.contact.apply(
-            pos=self.pos,
-            vel=self.vel,
-            attitude=self.attitude,
+            pos=st.pos,
+            vel=st.vel,
+            attitude=st.attitude,
             vel_before_step=vel_before_step,
-            thrust_accel=self.thrust_accel,
-            thrust_accel_setpoint=self.thrust_accel_setpoint,
+            thrust_accel=st.thrust_accel,
+            thrust_accel_setpoint=st.thrust_accel_setpoint,
             rng=self.np_random,
         )
-        self.thrust_accel = thrust_accel
-        self.thrust_accel_setpoint = thrust_accel_setpoint
+        st.thrust_accel = thrust_accel
+        st.thrust_accel_setpoint = thrust_accel_setpoint
         self._sync_contact_compatibility_fields()
-
-    def _rotation_body_to_ned(self) -> np.ndarray:
-        """Body-to-NED rotation matrix using aerospace roll/pitch/yaw."""
-        roll, pitch, yaw = [float(v) for v in self.attitude]
-        cr, sr = math.cos(roll), math.sin(roll)
-        cp, sp = math.cos(pitch), math.sin(pitch)
-        cy, sy = math.cos(yaw), math.sin(yaw)
-
-        # R = Rz(yaw) * Ry(pitch) * Rx(roll)
-        return np.array(
-            [
-                [cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
-                [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
-                [-sp, cp * sr, cp * cr],
-            ],
-            dtype=np.float64,
-        )
-
-    def _velocity_command_to_inner_loop_setpoints(
-        self,
-        v_cmd: np.ndarray,
-        dt: float,
-    ) -> tuple[np.ndarray, float, np.ndarray]:
-        """Convert velocity command to attitude/thrust setpoints.
-
-        This approximates the PX4 cascade:
-            velocity command -> acceleration demand -> attitude/thrust setpoint.
-
-        NED convention is used. Positive z acceleration means downward
-        acceleration, so it is produced by reducing collective thrust below
-        hover thrust.
-        """
-        dt_safe = max(float(dt), 1e-6)
-        g = float(self.cfg.gravity_mps2)
-
-        # Desired NED acceleration from velocity error. This replaces the old
-        # direct first-order velocity response with a physically interpretable
-        # acceleration request.
-        accel_cmd = (np.asarray(v_cmd, dtype=np.float64) - self.vel) / max(
-            self.cfg.vel_cmd_tau_s,
-            dt_safe,
-        )
-
-        axy_norm = float(np.linalg.norm(accel_cmd[:2]))
-        if axy_norm > self.cfg.max_cmd_accel_xy_mps2:
-            accel_cmd[:2] *= self.cfg.max_cmd_accel_xy_mps2 / (axy_norm + 1e-9)
-        accel_cmd[2] = float(np.clip(
-            accel_cmd[2],
-            -self.cfg.max_cmd_accel_z_mps2,
-            self.cfg.max_cmd_accel_z_mps2,
-        ))
-
-        # Near-hover multicopter tilt approximation in NED.
-        # +roll produces +East acceleration. +pitch produces -North acceleration.
-        denom = max(g - float(accel_cmd[2]), 1e-3)
-        roll_sp = math.atan2(float(accel_cmd[1]), denom)
-        pitch_sp = math.atan2(-float(accel_cmd[0]), denom)
-
-        roll_sp = float(np.clip(
-            roll_sp,
-            -self.cfg.max_tilt_target_rad,
-            self.cfg.max_tilt_target_rad,
-        ))
-        pitch_sp = float(np.clip(
-            pitch_sp,
-            -self.cfg.max_tilt_target_rad,
-            self.cfg.max_tilt_target_rad,
-        ))
-
-        yaw_sp = float(self.target_yaw)
-        thrust_sp = float(np.clip(
-            g - float(accel_cmd[2]),
-            self.cfg.min_thrust_accel_mps2,
-            self.cfg.max_thrust_accel_mps2,
-        ))
-
-        attitude_sp = np.array([roll_sp, pitch_sp, yaw_sp], dtype=np.float64)
-        return attitude_sp, thrust_sp, accel_cmd
+        self._sync_vehicle_state_compatibility_fields()
 
     def _update_rigid_body_dynamics(self, v_cmd: np.ndarray, dt: float) -> None:
-        """Update attitude, thrust, acceleration, velocity, and position.
+        """Orchestrate one control step of the rigid-body update.
 
-        This is a compact 6DoF-inspired plant model. It does not simulate motor
-        mixing or rotor angular momentum, but it exposes the key delay chain:
-            v_cmd -> attitude/thrust setpoint -> body-rate/thrust response
-            -> thrust vector in NED -> acceleration -> velocity -> position.
+        Phase 13C-1: the free-flight / PX4-proxy integration (D4-D25) lives in
+        ``LegacyVehicleDynamics.advance_free_flight`` and mutates the canonical
+        ``VehicleState``. This method still owns the surrounding sequence:
+            D2  contact.begin_step()  + vel_before snapshot
+            D4-D25  advance_free_flight(...)          (free flight)
+            D26  ContactModel.apply(...)              (ground contact)
+            D27  accel = (vel - vel_before) / dt_safe (final observed accel)
+        No ``PlantModel`` -- the ordering stays here in ``LandingEnv``.
         """
         dt_safe = max(float(dt), 1e-6)
-        g = float(self.cfg.gravity_mps2)
 
         # D2: clear the eight transient contact flags (verbatim
         # _reset_contact_step_flags). Kept exactly here -- before vel_before and
         # well before the D26 contact resolution -- as part of the frozen
         # execution topology. begin_step() touches no persistent ContactState
-        # field, so the motor_cutoff / ground_contact mirrors read at D5 / D16 /
-        # D18 still carry the previous step's latched values.
+        # field, so the motor_cutoff / ground_contact mirrors read inside
+        # advance_free_flight (D5 / D16 / D18) still carry the previous step's
+        # latched values.
         self.contact.begin_step()
         self._sync_contact_compatibility_fields()
-        vel_before = self.vel.copy()
+        vel_before = self._vehicle_state.vel.copy()
 
-        attitude_sp, thrust_sp, accel_cmd = self._velocity_command_to_inner_loop_setpoints(v_cmd, dt_safe)
-        if self.motor_cutoff:
-            thrust_sp = float(self.cfg.motor_cutoff_thrust_accel_mps2)
-
-        self.attitude_setpoint = attitude_sp.copy()
-        self.thrust_accel_setpoint = float(thrust_sp)
-        self.accel_cmd = accel_cmd.copy()
-
-        # Attitude/rate controller proxy.
-        att_error = np.array(
-            [
-                attitude_sp[0] - self.attitude[0],
-                attitude_sp[1] - self.attitude[1],
-                wrap_pi(float(attitude_sp[2] - self.attitude[2])),
-            ],
-            dtype=np.float64,
+        # D4-D25: free-flight rigid-body integration. motor_cutoff and
+        # ground_contact are passed as explicit bools (the previous / persistent
+        # contact state); wind_accel / target_yaw / the two response alphas are
+        # explicit inputs; self.np_random stays the sole RNG.
+        self.legacy_dynamics.advance_free_flight(
+            self._vehicle_state,
+            v_cmd,
+            dt_safe,
+            self.np_random,
+            self.wind_accel,
+            self.target_yaw,
+            self.body_rate_response_alpha,
+            self.thrust_response_alpha,
+            self.motor_cutoff,
+            self.ground_contact,
         )
+        self._sync_vehicle_state_compatibility_fields()
 
-        rate_cmd = att_error / max(self.cfg.attitude_time_constant_s, dt_safe)
-        rate_cmd[0] = float(np.clip(
-            rate_cmd[0],
-            -self.cfg.max_roll_pitch_rate_radps,
-            self.cfg.max_roll_pitch_rate_radps,
-        ))
-        rate_cmd[1] = float(np.clip(
-            rate_cmd[1],
-            -self.cfg.max_roll_pitch_rate_radps,
-            self.cfg.max_roll_pitch_rate_radps,
-        ))
-        rate_cmd[2] = float(np.clip(
-            self.cfg.yaw_align_kp * att_error[2],
-            -self.cfg.max_yaw_rate_response_radps,
-            self.cfg.max_yaw_rate_response_radps,
-        ))
-
-        rate_alpha_eff = 1.0 - np.power(
-            1.0 - np.clip(self.body_rate_response_alpha, 1e-4, 0.9999),
-            dt_safe / max(self.cfg.dt, 1e-6),
-        )
-        rate_alpha_eff = np.clip(rate_alpha_eff, 0.0, 1.0)
-
-        self.body_rates = self.body_rates + rate_alpha_eff * (rate_cmd - self.body_rates)
-
-        noise_scale = math.sqrt(dt_safe / max(self.cfg.dt, 1e-6))
-        # Phase 11: body-rate process noise (draw 1 of 3). Verbatim expression;
-        # noise_scale stays computed here.
-        self.body_rates += self.process_noise.sample_body_rate(
-            self.np_random, noise_scale
-        )
-
-        self.attitude[0] = float(np.clip(
-            self.attitude[0] + self.body_rates[0] * dt_safe,
-            -math.pi,
-            math.pi,
-        ))
-        self.attitude[1] = float(np.clip(
-            self.attitude[1] + self.body_rates[1] * dt_safe,
-            -math.pi,
-            math.pi,
-        ))
-        self.attitude[2] = wrap_pi(float(self.attitude[2] + self.body_rates[2] * dt_safe))
-        self.yaw_rate = float(self.body_rates[2])
-
-        # Collective thrust/motor response proxy.
-        thrust_alpha_eff = 1.0 - (1.0 - np.clip(self.thrust_response_alpha, 1e-4, 0.9999)) ** (
-            dt_safe / max(self.cfg.dt, 1e-6)
-        )
-        thrust_alpha_eff = float(np.clip(thrust_alpha_eff, 0.0, 1.0))
-        self.thrust_accel = float(
-            self.thrust_accel
-            + thrust_alpha_eff * (thrust_sp - self.thrust_accel)
-            + self.process_noise.sample_thrust(self.np_random, noise_scale)  # draw 2 of 3 (scalar)
-        )
-        thrust_min = (
-            float(self.cfg.motor_cutoff_thrust_accel_mps2)
-            if self.motor_cutoff
-            else float(self.cfg.min_thrust_accel_mps2)
-        )
-        self.thrust_accel = float(np.clip(
-            self.thrust_accel,
-            thrust_min,
-            self.cfg.max_thrust_accel_mps2,
-        ))
-
-        # Rigid-body translational dynamics in NED.
-        r_bn = self._rotation_body_to_ned()
-        body_z_in_ned = r_bn[:, 2]
-        gravity_accel = np.array([0.0, 0.0, g], dtype=np.float64)
-
-        self.ground_effect_factor = self._compute_ground_effect_factor()
-        effective_thrust_accel = self.thrust_accel * self.ground_effect_factor
-        thrust_accel_ned = -effective_thrust_accel * body_z_in_ned
-        drag_accel = -np.array(
-            [
-                self.cfg.linear_drag_xy * self.vel[0],
-                self.cfg.linear_drag_xy * self.vel[1],
-                self.cfg.linear_drag_z * self.vel[2],
-            ],
-            dtype=np.float64,
-        )
-        # Phase 11: translational-acceleration process noise (draw 3 of 3).
-        process_accel_noise = self.process_noise.sample_translational_accel(
-            self.np_random, noise_scale, dt_safe
-        )
-
-        self.prev_accel = self.accel.copy()
-        self.accel = gravity_accel + thrust_accel_ned + drag_accel + self.wind_accel + process_accel_noise
-
-        self.vel = self.vel + self.accel * dt_safe
-        self.pos = self.pos + self.vel * dt_safe
-
+        # D26: ground-contact resolution (mutates VehicleState pos/vel/attitude
+        # in place; may overwrite the thrust scalars on a soft touchdown).
         self._apply_ground_contact(vel_before)
 
-        # Keep the acceleration channel consistent with the actual velocity change.
-        # This is the value the policy observes as ax/ay/az.
-        self.accel = (self.vel - vel_before) / dt_safe
+        # D27: keep the acceleration channel consistent with the actual velocity
+        # change. This is the value the policy observes as ax/ay/az. Stays in
+        # LandingEnv (AFTER contact); not moved into LegacyVehicleDynamics or
+        # ContactModel.
+        self._vehicle_state.accel = (self._vehicle_state.vel - vel_before) / dt_safe
+        self._sync_vehicle_state_compatibility_fields()
 
     # ------------------------------------------------------------------
     # Gymnasium API
@@ -834,28 +721,40 @@ class LandingEnv(gym.Env):
         # legacy velocity draw and attitude draws (accel, prev_accel,
         # prev_action, target_yaw) consume no RNG and stay in this env.
         pos, vel, attitude = self.initial_state_sampler.sample(self.np_random)
-        self.pos = pos
-        self.vel = vel
-        self.accel = np.zeros(3, dtype=np.float64)
-        self.prev_accel = np.zeros(3, dtype=np.float64)
 
         self.prev_action = np.zeros(3, dtype=np.float64)
-
         self.target_yaw = float(self.cfg.target_yaw_rad)
-        self.attitude = attitude
-        self.yaw_rate = 0.0
-        self.body_rates = np.zeros(3, dtype=np.float64)
-        self.thrust_accel = float(self.cfg.gravity_mps2)
-        self.attitude_setpoint = self.attitude.copy()
-        self.thrust_accel_setpoint = float(self.cfg.gravity_mps2)
-        self.accel_cmd = np.zeros(3, dtype=np.float64)
+
+        # Phase 13C-1: rebuild the canonical VehicleState from the sampled
+        # initial (pos, vel, attitude) plus the deterministic reset values --
+        # byte-for-byte the same values the legacy env assigned to the flat
+        # attributes: accel / prev_accel / accel_cmd = zeros, yaw_rate = 0,
+        # body_rates = zeros, thrust_accel / thrust_accel_setpoint = hover,
+        # attitude_setpoint = attitude.copy(), ground_effect_factor = 1.0.
+        # Consumes no RNG and does not change the reset RNG order. The flat
+        # self.* mirrors are then synced (ndarray fields share identity with the
+        # sampler outputs / VehicleState arrays; scalars are value copies).
+        self._vehicle_state = VehicleState(
+            pos=pos,
+            vel=vel,
+            accel=np.zeros(3, dtype=np.float64),
+            prev_accel=np.zeros(3, dtype=np.float64),
+            attitude=attitude,
+            yaw_rate=0.0,
+            body_rates=np.zeros(3, dtype=np.float64),
+            thrust_accel=float(self.cfg.gravity_mps2),
+            attitude_setpoint=attitude.copy(),
+            thrust_accel_setpoint=float(self.cfg.gravity_mps2),
+            accel_cmd=np.zeros(3, dtype=np.float64),
+            ground_effect_factor=1.0,
+        )
+        self._sync_vehicle_state_compatibility_fields()
 
         # Phase 13B: the four persistent contact fields + the eight transient
         # flags are reset by ContactModel now (verbatim legacy values, zero
-        # RNG). ground_effect_factor is NOT contact state -- it stays an env
-        # field, set here exactly as before. The flat contact mirrors are then
-        # synced from the canonical ContactState / ContactResult.
-        self.ground_effect_factor = 1.0
+        # RNG). ground_effect_factor is a VehicleState field (reset to 1.0
+        # above), not contact state. The flat contact mirrors are then synced
+        # from the canonical ContactState / ContactResult.
         self.contact.reset()
         self._sync_contact_compatibility_fields()
 
