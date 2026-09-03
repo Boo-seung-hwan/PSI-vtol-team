@@ -5,6 +5,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 
+from landing_rl.contact import ContactModel
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
 from landing_rl.dynamics import ProcessNoiseSampler, ResponseAlphas
@@ -329,6 +330,17 @@ class LandingEnv(gym.Env):
         # is still computed in that method and passed in.
         self.process_noise = ProcessNoiseSampler(self.cfg)
 
+        # Phase 13B: the legacy ground-contact logic + contact bookkeeping live
+        # here now. Owns only cfg, a ContactState (four persistent fields:
+        # ground_contact / contact_count / bounce_count / motor_cutoff) and a
+        # ContactResult (eight transient per-step fields). Holds no RNG, no
+        # pos/vel/attitude/thrust. contact.apply() takes self.np_random and
+        # consumes one uniform draw only on the legacy should_bounce branch.
+        # The flat self.* contact attributes below are compatibility MIRRORS
+        # (value copies, not identity aliases) kept in sync by
+        # _sync_contact_compatibility_fields().
+        self.contact = ContactModel(self.cfg)
+
         # Phase 9: the randomized initial (pos, vel, attitude) draws live here
         # now. Owns only cfg; keeps no pos/vel/attitude/RNG. sample() consumes
         # seven np_random.uniform(...) draws (x, y, altitude, vel size=3, roll,
@@ -405,21 +417,14 @@ class LandingEnv(gym.Env):
         self.obs_target_valid = True
         self.obs_target_mode = "init"
 
-        # Landing-contact state. These are reset every episode and updated by
-        # the contact model after position integration.
-        self.ground_contact = False
-        self.contact_count = 0
-        self.bounce_count = 0
-        self.motor_cutoff = False
+        # Landing-contact state. Canonical owner is self.contact (ContactModel);
+        # ContactState / ContactResult already hold the legacy default values,
+        # so this just mirrors them onto the flat env attributes that reward /
+        # info / the comparators read. ground_effect_factor is env-owned (not
+        # contact state) and is set explicitly. Reset every episode and updated
+        # by the contact model after position integration.
         self.ground_effect_factor = 1.0
-        self.contact_event = False
-        self.soft_contact = False
-        self.hard_contact = False
-        self.bounced = False
-        self.touchdown_quality = "none"
-        self.last_impact_vz = 0.0
-        self.last_touchdown_vxy = 0.0
-        self.last_bounce_speed = 0.0
+        self._sync_contact_compatibility_fields()
 
     # ------------------------------------------------------------------
     # Sampling helpers
@@ -546,96 +551,56 @@ class LandingEnv(gym.Env):
         factor = 1.0 + float(self.cfg.ground_effect_gain) * closeness * closeness
         return float(np.clip(factor, 1.0, self.cfg.ground_effect_max_factor))
 
-    def _reset_contact_step_flags(self) -> None:
-        self.contact_event = False
-        self.soft_contact = False
-        self.hard_contact = False
-        self.bounced = False
-        self.touchdown_quality = "none"
-        self.last_impact_vz = 0.0
-        self.last_touchdown_vxy = 0.0
-        self.last_bounce_speed = 0.0
+    def _sync_contact_compatibility_fields(self) -> None:
+        """Mirror ContactModel's canonical state/result onto the flat LandingEnv
+        attributes that reward / success / failure / info / the regression
+        comparators read.
+
+        These are value copies (bool / int / float / str), NOT identity
+        aliases -- Python scalars/strings cannot be aliased -- so this must be
+        re-run after every ``contact.reset()`` / ``contact.begin_step()`` /
+        ``contact.apply()`` to keep the mirrors from going stale. ``contact.state``
+        is canonical.
+        """
+        s = self.contact.state
+        self.ground_contact = s.ground_contact
+        self.contact_count = s.contact_count
+        self.bounce_count = s.bounce_count
+        self.motor_cutoff = s.motor_cutoff
+
+        r = self.contact.result
+        self.contact_event = r.contact_event
+        self.soft_contact = r.soft_contact
+        self.hard_contact = r.hard_contact
+        self.bounced = r.bounced
+        self.touchdown_quality = r.touchdown_quality
+        self.last_impact_vz = r.last_impact_vz
+        self.last_touchdown_vxy = r.last_touchdown_vxy
+        self.last_bounce_speed = r.last_bounce_speed
 
     def _apply_ground_contact(self, vel_before_step: np.ndarray) -> None:
         """Resolve simple ground contact and bounce at z=ground_z_m.
 
-        NED convention: z velocity > 0 means descending toward the ground.
-        A soft touchdown pins the vehicle to the ground and optionally cuts
-        thrust. A faster touchdown creates an upward rebound. A very fast or
-        highly tilted touchdown is marked as hard contact and will terminate
-        the episode as a failed landing.
+        Phase 13B: the actual logic lives in ``ContactModel.apply`` now. This
+        method is kept as the D26 call seam (its exact location between the
+        provisional position integration and the post-contact acceleration
+        recompute is part of the frozen execution topology). ``self.pos`` /
+        ``self.vel`` / ``self.attitude`` are handed in by reference and mutated
+        in place exactly as before; the scalar thrust values are returned and
+        written back here; the contact compatibility mirrors are re-synced.
         """
-        if not self.cfg.contact_enabled:
-            return
-
-        ground_z = float(self.cfg.ground_z_m)
-        if self.pos[2] < ground_z:
-            self.ground_contact = False
-            self.contact_count = 0
-            return
-
-        self.contact_event = True
-        self.ground_contact = True
-        self.contact_count += 1
-        self.pos[2] = ground_z
-
-        impact_vz = max(float(self.vel[2]), float(vel_before_step[2]), 0.0)
-        touchdown_vxy = float(np.linalg.norm(self.vel[:2]))
-        tilt = float(np.linalg.norm(self.attitude[:2]))
-
-        self.last_impact_vz = impact_vz
-        self.last_touchdown_vxy = touchdown_vxy
-
-        self.hard_contact = (
-            impact_vz > self.cfg.hard_touchdown_vz_mps
-            or touchdown_vxy > self.cfg.hard_touchdown_vxy_mps
-            or tilt > self.cfg.hard_touchdown_tilt_rad
+        result, thrust_accel, thrust_accel_setpoint = self.contact.apply(
+            pos=self.pos,
+            vel=self.vel,
+            attitude=self.attitude,
+            vel_before_step=vel_before_step,
+            thrust_accel=self.thrust_accel,
+            thrust_accel_setpoint=self.thrust_accel_setpoint,
+            rng=self.np_random,
         )
-
-        self.soft_contact = (
-            impact_vz <= self.cfg.touchdown_vz_soft_mps
-            and touchdown_vxy <= self.cfg.touchdown_vxy_soft_mps
-            and tilt <= self.cfg.touchdown_tilt_soft_rad
-            and not self.hard_contact
-        )
-
-        if self.hard_contact:
-            self.touchdown_quality = "hard"
-        elif self.soft_contact:
-            self.touchdown_quality = "soft"
-        else:
-            self.touchdown_quality = "rough"
-
-        # Tangential ground friction removes lateral sliding at contact.
-        self.vel[:2] *= float(np.clip(1.0 - self.cfg.ground_friction_xy, 0.0, 1.0))
-
-        should_bounce = (
-            impact_vz > self.cfg.bounce_vz_threshold_mps
-            and not self.soft_contact
-        )
-
-        if should_bounce:
-            restitution = float(self.np_random.uniform(
-                self.cfg.bounce_restitution_min,
-                self.cfg.bounce_restitution_max,
-            ))
-            bounce_speed = restitution * impact_vz
-            self.vel[2] = -bounce_speed  # negative NED z means rebound upward
-            self.bounced = True
-            self.bounce_count += 1
-            self.contact_count = 0
-            self.last_bounce_speed = bounce_speed
-            if not self.hard_contact:
-                self.touchdown_quality = "bounce"
-        else:
-            # No rebound: vehicle stays on the ground.
-            self.vel[2] = 0.0
-            self.last_bounce_speed = 0.0
-
-        if self.soft_contact and self.cfg.motor_cutoff_on_soft_contact:
-            self.motor_cutoff = True
-            self.thrust_accel_setpoint = float(self.cfg.motor_cutoff_thrust_accel_mps2)
-            self.thrust_accel = float(self.cfg.motor_cutoff_thrust_accel_mps2)
+        self.thrust_accel = thrust_accel
+        self.thrust_accel_setpoint = thrust_accel_setpoint
+        self._sync_contact_compatibility_fields()
 
     def _rotation_body_to_ned(self) -> np.ndarray:
         """Body-to-NED rotation matrix using aerospace roll/pitch/yaw."""
@@ -726,7 +691,14 @@ class LandingEnv(gym.Env):
         dt_safe = max(float(dt), 1e-6)
         g = float(self.cfg.gravity_mps2)
 
-        self._reset_contact_step_flags()
+        # D2: clear the eight transient contact flags (verbatim
+        # _reset_contact_step_flags). Kept exactly here -- before vel_before and
+        # well before the D26 contact resolution -- as part of the frozen
+        # execution topology. begin_step() touches no persistent ContactState
+        # field, so the motor_cutoff / ground_contact mirrors read at D5 / D16 /
+        # D18 still carry the previous step's latched values.
+        self.contact.begin_step()
+        self._sync_contact_compatibility_fields()
         vel_before = self.vel.copy()
 
         attitude_sp, thrust_sp, accel_cmd = self._velocity_command_to_inner_loop_setpoints(v_cmd, dt_safe)
@@ -878,12 +850,14 @@ class LandingEnv(gym.Env):
         self.thrust_accel_setpoint = float(self.cfg.gravity_mps2)
         self.accel_cmd = np.zeros(3, dtype=np.float64)
 
-        self.ground_contact = False
-        self.contact_count = 0
-        self.bounce_count = 0
-        self.motor_cutoff = False
+        # Phase 13B: the four persistent contact fields + the eight transient
+        # flags are reset by ContactModel now (verbatim legacy values, zero
+        # RNG). ground_effect_factor is NOT contact state -- it stays an env
+        # field, set here exactly as before. The flat contact mirrors are then
+        # synced from the canonical ContactState / ContactResult.
         self.ground_effect_factor = 1.0
-        self._reset_contact_step_flags()
+        self.contact.reset()
+        self._sync_contact_compatibility_fields()
 
         self.prev_potential = self._potential()
 
