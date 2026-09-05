@@ -10,6 +10,7 @@ from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
 from landing_rl.dynamics import (
     LegacyVehicleDynamics,
+    PlantModel,
     ProcessNoiseSampler,
     ResponseAlphas,
     VehicleState,
@@ -340,10 +341,7 @@ class LandingEnv(gym.Env):
         # and the shared ProcessNoiseSampler; holds no RNG, no VehicleState, no
         # ContactModel, no env reference, no wind / alpha / target state. Its
         # advance_free_flight(state, ...) mutates the canonical VehicleState in
-        # place and takes self.np_random + explicit scalar/bool inputs. The D2
-        # contact.begin_step(), the vel_before snapshot, the D26
-        # ContactModel.apply(), and the D27 post-contact accel recompute all
-        # stay in _update_rigid_body_dynamics below (no PlantModel yet).
+        # place and takes self.np_random + explicit scalar/bool inputs.
         self.legacy_dynamics = LegacyVehicleDynamics(self.cfg, self.process_noise)
 
         # Phase 13B: the legacy ground-contact logic + contact bookkeeping live
@@ -356,6 +354,19 @@ class LandingEnv(gym.Env):
         # (value copies, not identity aliases) kept in sync by
         # _sync_contact_compatibility_fields().
         self.contact = ContactModel(self.cfg)
+
+        # Phase 13C-2: the D2 contact.begin_step() + vel_before snapshot, the
+        # D4-D25 advance_free_flight() call, the D26 ContactModel.apply(), the
+        # thrust scalar write-back, and the D27 post-contact accel recompute
+        # -- previously inline in _update_rigid_body_dynamics -- are now
+        # orchestrated by PlantModel.step(). PlantModel owns only cfg and
+        # these two already-constructed collaborators (self.legacy_dynamics,
+        # self.contact); it holds no RNG, no VehicleState, no LandingEnv
+        # reference, no wind / target / alpha state. self.np_random is passed
+        # into plant.step() explicitly and remains the sole RNG owner.
+        # _update_rigid_body_dynamics below becomes the compatibility-mirror
+        # sync seam around the single plant.step() call.
+        self.plant = PlantModel(self.cfg, self.legacy_dynamics, self.contact)
 
         # Phase 9: the randomized initial (pos, vel, attitude) draws live here
         # now. Owns only cfg; keeps no pos/vel/attitude/RNG. sample() consumes
@@ -574,11 +585,14 @@ class LandingEnv(gym.Env):
         the SAME array object held by ``self._vehicle_state`` (object identity is
         preserved at every point where reward / obs / info read them -- i.e.
         after ``reset()`` and after each full ``_update_rigid_body_dynamics``
-        call). ``LegacyVehicleDynamics.advance_free_flight`` rebinds
-        ``state.vel`` / ``pos`` / ``accel`` / ``prev_accel`` / ``body_rates`` /
-        ``attitude_setpoint`` / ``accel_cmd`` to fresh arrays, so this must be
-        re-run after it (and again after the D27 accel recompute). The four
-        scalar fields (``yaw_rate``, ``thrust_accel``, ``thrust_accel_setpoint``,
+        call). Phase 13C-2: ``PlantModel.step`` (via
+        ``LegacyVehicleDynamics.advance_free_flight`` and ``ContactModel.apply``)
+        rebinds ``state.vel`` / ``pos`` / ``accel`` / ``prev_accel`` /
+        ``body_rates`` / ``attitude_setpoint`` / ``accel_cmd`` to fresh arrays
+        and recomputes ``state.accel`` (D27) internally, all before returning --
+        so this only needs to run once, immediately after ``plant.step``
+        returns, to pick up every rebinding in one call. The four scalar fields
+        (``yaw_rate``, ``thrust_accel``, ``thrust_accel_setpoint``,
         ``ground_effect_factor``) are value copies. ``self._vehicle_state`` is
         canonical.
         """
@@ -603,9 +617,10 @@ class LandingEnv(gym.Env):
 
         These are value copies (bool / int / float / str), NOT identity
         aliases -- Python scalars/strings cannot be aliased -- so this must be
-        re-run after every ``contact.reset()`` / ``contact.begin_step()`` /
-        ``contact.apply()`` to keep the mirrors from going stale. ``contact.state``
-        is canonical.
+        re-run after every ``contact.reset()`` and after every
+        ``plant.step()`` (which drives ``contact.begin_step()`` then
+        ``contact.apply()`` internally) to keep the mirrors from going stale.
+        ``contact.state`` is canonical.
         """
         s = self.contact.state
         self.ground_contact = s.ground_contact
@@ -623,87 +638,32 @@ class LandingEnv(gym.Env):
         self.last_touchdown_vxy = r.last_touchdown_vxy
         self.last_bounce_speed = r.last_bounce_speed
 
-    def _apply_ground_contact(self, vel_before_step: np.ndarray) -> None:
-        """Resolve simple ground contact and bounce at z=ground_z_m (D26 seam).
-
-        Phase 13B: the logic lives in ``ContactModel.apply``. Phase 13C-1: it
-        now operates on the canonical ``VehicleState`` -- ``self._vehicle_state``
-        ``pos`` / ``vel`` / ``attitude`` are handed in by reference and mutated
-        in place; the scalar thrust values are returned and written back onto the
-        VehicleState here. This method is kept as the named D26 call seam: its
-        exact location between the provisional position integration
-        (``advance_free_flight``) and the post-contact acceleration recompute
-        (D27) is part of the frozen execution topology. Contact and vehicle
-        compatibility mirrors are re-synced afterwards.
-        """
-        st = self._vehicle_state
-        result, thrust_accel, thrust_accel_setpoint = self.contact.apply(
-            pos=st.pos,
-            vel=st.vel,
-            attitude=st.attitude,
-            vel_before_step=vel_before_step,
-            thrust_accel=st.thrust_accel,
-            thrust_accel_setpoint=st.thrust_accel_setpoint,
-            rng=self.np_random,
-        )
-        st.thrust_accel = thrust_accel
-        st.thrust_accel_setpoint = thrust_accel_setpoint
-        self._sync_contact_compatibility_fields()
-        self._sync_vehicle_state_compatibility_fields()
-
     def _update_rigid_body_dynamics(self, v_cmd: np.ndarray, dt: float) -> None:
         """Orchestrate one control step of the rigid-body update.
 
-        Phase 13C-1: the free-flight / PX4-proxy integration (D4-D25) lives in
-        ``LegacyVehicleDynamics.advance_free_flight`` and mutates the canonical
-        ``VehicleState``. This method still owns the surrounding sequence:
-            D2  contact.begin_step()  + vel_before snapshot
-            D4-D25  advance_free_flight(...)          (free flight)
-            D26  ContactModel.apply(...)              (ground contact)
-            D27  accel = (vel - vel_before) / dt_safe (final observed accel)
-        No ``PlantModel`` -- the ordering stays here in ``LandingEnv``.
+        Phase 13C-2: the full plant orchestration -- D2 contact.begin_step() +
+        vel_before snapshot, D4-D25 advance_free_flight() (free flight), D26
+        ContactModel.apply() (ground contact) + thrust scalar write-back, and
+        D27 accel = (vel - vel_before) / dt_safe (final observed accel) --
+        lives in ``PlantModel.step`` now and mutates the canonical
+        ``VehicleState`` / ``ContactModel`` in place. This method is the
+        compatibility-mirror sync seam around that single call: reward /
+        observation / info / the regression comparators keep reading the flat
+        self.* mirrors, so both mirrors are re-synced immediately after
+        ``plant.step`` returns.
         """
-        dt_safe = max(float(dt), 1e-6)
-
-        # D2: clear the eight transient contact flags (verbatim
-        # _reset_contact_step_flags). Kept exactly here -- before vel_before and
-        # well before the D26 contact resolution -- as part of the frozen
-        # execution topology. begin_step() touches no persistent ContactState
-        # field, so the motor_cutoff / ground_contact mirrors read inside
-        # advance_free_flight (D5 / D16 / D18) still carry the previous step's
-        # latched values.
-        self.contact.begin_step()
-        self._sync_contact_compatibility_fields()
-        vel_before = self._vehicle_state.vel.copy()
-
-        # D4-D25: free-flight rigid-body integration. motor_cutoff and
-        # ground_contact are passed as explicit bools (the previous / persistent
-        # contact state); wind_accel / target_yaw / the two response alphas are
-        # explicit inputs; self.np_random stays the sole RNG.
-        self.legacy_dynamics.advance_free_flight(
+        self.plant.step(
             self._vehicle_state,
             v_cmd,
-            dt_safe,
+            dt,
             self.np_random,
             self.wind_accel,
             self.target_yaw,
             self.body_rate_response_alpha,
             self.thrust_response_alpha,
-            self.motor_cutoff,
-            self.ground_contact,
         )
         self._sync_vehicle_state_compatibility_fields()
-
-        # D26: ground-contact resolution (mutates VehicleState pos/vel/attitude
-        # in place; may overwrite the thrust scalars on a soft touchdown).
-        self._apply_ground_contact(vel_before)
-
-        # D27: keep the acceleration channel consistent with the actual velocity
-        # change. This is the value the policy observes as ax/ay/az. Stays in
-        # LandingEnv (AFTER contact); not moved into LegacyVehicleDynamics or
-        # ContactModel.
-        self._vehicle_state.accel = (self._vehicle_state.vel - vel_before) / dt_safe
-        self._sync_vehicle_state_compatibility_fields()
+        self._sync_contact_compatibility_fields()
 
     # ------------------------------------------------------------------
     # Gymnasium API
