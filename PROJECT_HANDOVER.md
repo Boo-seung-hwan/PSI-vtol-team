@@ -1,9 +1,9 @@
 # UGRP Precision-Landing Project Handover
 
-Last updated: 2026-09-07 (consistency-audit pass; see §9, 2026-09-07 entry)
+Last updated: 2026-09-07 (system_id/preprocessing implemented + pre-commit consistency audit: block-specific masks, setpoint-pairing validity, spec-thrust proxy safety; see §5 and the two 2026-09-07 §9 preprocessing entries)
 Repository: `/home/qntmdghkss/drone_stack_rl_refactor` (a Git worktree of the UGRP drone_stack repository; per CLAUDE.md §5 this path is not guaranteed stable across sessions/machines — always re-verify with `git rev-parse --show-toplevel`)
 Branch: `refactor/landing-rl-architecture`
-HEAD: `a2260a3988da71f2c266776e2b267e390dd23538` ("Add expanded structural freeze gate")
+HEAD: `bc409638ffe791e0858642385fe9fdfbce073d82` ("docs: add UGRP project handover baseline"); the preprocessing implementation described in §5/§9 is IN THE WORKING TREE, NOT COMMITTED.
 
 This document is created for the first time in this session. No prior
 `PROJECT_HANDOVER.md` existed in this repository before this entry (verified:
@@ -119,11 +119,14 @@ gated on PX4 gains being sufficiently stabilized. This is a currently-active
 canonical research direction (recorded in `CLAUDE.md` §2/§3/§19/§29), not a
 statement about what has been built.
 
-[CONFIRMED] **`system_id/` is entirely unimplemented.** `system_id/preprocessing/`,
-`identification/`, `validation/`, `results/` all exist as directories but
-contain **0 files** (verified via `find`/`ls -la` this session). NOT
-IMPLEMENTED. The active-direction claim above does not imply any of this
-exists yet — it does not.
+[CONFIRMED — 2026-09-07] **`system_id/preprocessing/` is now implemented**
+(raw `.ulg` → validated topic extraction → per-loop timebase → frame-consistent
+derived signals → validity/saturation/contact masks → contiguous SI segments →
+per-loop datasets → provenance + data-quality report). It fits **nothing** and
+writes no parameters. `system_id/identification/`, `system_id/validation/`,
+`system_id/results/` remain **empty — NOT IMPLEMENTED**. See §5 for detail.
+The active SI *direction* above is unchanged; no UGRP numeric parameter has
+been identified.
 
 ## 0.7 Current PX4 / gain-tuning status
 
@@ -165,7 +168,12 @@ above).
 
 - `landing_rl/` is structurally verified equivalent but **not wired** into
   any training/evaluation entry point (§0.3).
-- `system_id/` is **completely unimplemented** — 0 files in all 4 subdirectories (§0.6).
+- `system_id/` is **partially implemented**: `preprocessing/` exists (§5);
+  `identification/`, `validation/`, `results/` are still empty. No UGRP
+  parameter identified. The only ULogs available are OTHER-PROJECT sample
+  logs (`OTHER_PROJECT_SAMPLE` / `PIPELINE_VALIDATION_ONLY`), usable for
+  pipeline validation only — no number derived from them may enter a UGRP
+  config (§5, §9).
 - `landing_rl/configs/{environment,training,vehicle}/` are empty directories
   — no config files exist there; all effective training/eval configs
   currently live as Python literals inside individual `mujoco_rl/*.py` scripts.
@@ -183,14 +191,19 @@ above).
 
 ## 0.10 Immediate next step
 
-[OPEN] — no user-approved "next step" decision is recorded anywhere in this
-repository (this is the first handover; nothing to inherit). Do not treat any
-of the following as decided: extracting reward/termination into its own
-module, wiring `landing_rl` into training/evaluation, populating
-`landing_rl/configs/*`, or starting `system_id/preprocessing`. These are only
-structurally implied by `CLAUDE.md` §14.2/§17/§19 as areas the project intends
-to eventually cover — they are `[PROPOSAL]`, not `[DECISION]`, until the user
-explicitly picks one.
+[OPEN] — no user-approved "next step" decision is recorded. The 2026-09-07
+phase implemented `system_id/preprocessing/` (a user-directed scope). The
+natural follow-ons are still `[PROPOSAL]`, not `[DECISION]`, until the user
+picks one:
+  * obtain **dedicated UGRP SI flights** on the pinned PX4 1.15 in offboard
+    **velocity** mode (the sample logs are position-mode, other-project) and
+    with a raised `SDLOG_PROFILE` rate for `vehicle_local_position_setpoint`;
+  * then start `system_id/identification/` (attitude-setpoint→attitude and
+    rate-setpoint→body-rate first; the PX4 velocity→accel and accel→attitude
+    mappings are source-known and only need validation, not fitting — see the
+    2026-09-07 "command-path" audit clarification);
+  * unrelated legacy-RL items (reward/termination extraction, wiring
+    `landing_rl` into training, populating `landing_rl/configs/*`) remain open.
 
 ---
 
@@ -407,16 +420,62 @@ output artifacts exist externally; the stage0 config is only recoverable via
 
 # 5. System-identification track
 
-[CONFIRMED] `system_id/preprocessing/`, `system_id/identification/`,
-`system_id/validation/`, `system_id/results/` all exist as directories with
-**zero files** in each (verified via `find . -type f` and `ls -la` on all
-four this session). **NOT IMPLEMENTED.**
+## 5.1 `system_id/preprocessing/` — IMPLEMENTED 2026-09-07 (working tree, not committed)
 
-No ULog ingestion code, no delay/velocity/attitude/rate/thrust identification
-code, no validation/plotting code, and no exported parameter sets exist
-anywhere in the repository at HEAD. This directly matches `CLAUDE.md` §19's
-description of `system_id/`'s *intended* responsibilities — none of them are
-built yet.
+[FACT] First SI implementation phase. Scope was strictly preprocessing —
+**no parameter identification, no dynamics backend**. Modules
+(`system_id/preprocessing/`):
+
+| module | responsibility |
+|---|---|
+| `ulog_loader.py` | `pyulog` wrapper: SHA256, PX4 version/hw/airframe/params, one `TopicData` per topic; `ULogLoadError` for missing/corrupt file or missing **required** topic; missing **optional** topics (e.g. `esc_status`) recorded, never fatal |
+| `schema.py` | version-tolerant signal schema; per-loop `ColumnSpec` (name/unit/frame/source); `rates_setpoint_fields` resolves scalar `roll/pitch/yaw` vs `xyz[0..2]`; Euler ALWAYS derived from quaternions (no `roll_body` dependence); `NEAR_LEVEL_MAX_RAD` (10°); `SCHEMA_VERSION="0.2.0"` |
+| `frames.py` | `quat_to_euler_xyz` (intrinsic x-y-z), `tilt_from_quat`, thrust-vector magnitude, `wrap_pi`; degenerate quaternion → zeros not NaN |
+| `timebase.py` | per-loop canonical grids (velocity ~10 Hz, attitude ~20 Hz, rate ~50 Hz, translation ~20 Hz) — **never one global fastest rate**; `timestamp_sample` for measurement topics else `timestamp`; `vehicle_local_position_setpoint` nearest-matched (`nearest_match`/`sample_aligned`, ±`CYCLE_PAIR_TOL_US`=15 ms) to the `vehicle_local_position` sample of its own MPC cycle; ZOH for slow→fast setpoints only |
+| `masks.py` | ONE `flight_base` mask (8 base reasons: `not_armed / not_offboard / not_mc_pos / landed / ground_contact / maybe_landed / motor_saturated / accel_sentinel`) + `ground_effect` term + `MaskResult.block_base(block)` / `combine_block(block, *extra)`. `in_ground_effect` rejects ONLY `velocity_z / thrust / translation` (`BLOCK_GE_SENSITIVE`); `attitude / rate / velocity_xy` keep low-altitude data. `thrust` additionally requires `near_level` (`BLOCK_NEAR_LEVEL_REQUIRED`). Named constants `MOTOR_SAT_HIGH=0.98`, `MOTOR_SAT_LOW=0.02`, `MOTOR_SAT_DILATION_S=0.03`, `ACCEL_SENTINEL_ABS_MPS2=30.0`, `NEAR_LEVEL_MAX_RAD`. `valid_core`/`valid_strict` kept as read-only back-compat aliases. |
+| `segments.py` | contiguous valid runs only (never concatenates disconnected intervals); `MIN_SEGMENT_S=1.5`; splits on internal time gaps; stores per-segment source/start/end/duration + preceding-gap rejection summary. Segmentation is **per SI block** (each block uses its own block mask). |
+| `dataset.py` | four per-loop datasets; NED acceleration and body specific force kept in separate named columns, never summed; velocity setpoint column is `vehicle_local_position_setpoint.vx/vy/vz` (NOT `trajectory_setpoint.velocity`). Each `LoopDataset` also carries `block_masks` (final bool[n] per block = `block_base & near_level? & required-I/O-finite & setpoint-pairing-matched?`), `aux` masks, and `pairing` stats. A row whose required input/output is NaN, or whose `vehicle_local_position_setpoint` pairing failed, is `False` for that block. `body_z_specific_force_proxy` (renamed from `spec_thrust_recon`) + a mandatory `near_level_valid` column carry an explicit "CRUDE proxy, not a calibrated thrust" warning in their metadata. |
+| `provenance.py` | SHA256, PX4 version, hardware, airframe + MPC/MC parameter subsets (of the LOGGED vehicle), tool versions, git commit/dirty, UTC timestamp, `schema_version`; explicit `source_project` + `dataset_role` |
+| `report.py` | data-quality / excitation gate — **per SI block** (attitude / rate / velocity_xy / velocity_z / thrust / translation): valid duration, segments, per-channel GOOD/MARGINAL/POOR (std + range + I/O correlation caps); plus per-loop timebase diagnostics and the setpoint-pairing match fraction. Disclaimer: *"does NOT declare any physical model identified"* |
+| `pipeline.py` | orchestrator `preprocess_log()` + `run_batch()` + `python -m system_id.preprocessing.pipeline` CLI; writes `<loop>.npz` (columns + `_flight_base` / `_ground_effect` / `_reject_<reason>` / `_block_<name>` / `_aux_<name>`) + `columns.json` / `segments.json` (keyed by block) / `provenance.json` / `report.{json,txt}` |
+
+**Derived-data location:** `system_id/derived/sample_other_project/<logstem>/`
+(added to `.gitignore`; regenerable, never a source of truth). Raw ULogs are
+read-only and were not moved or deleted.
+
+**Tests:** `system_id/tests/` (plain `unittest`, mirrors `landing_rl/tests/`
+style). **67 tests** — synthetic-fixture unit tests for quaternion conversion,
+timebase/stamp selection, ZOH, nearest-match cycle alignment, saturation mask
++ dilation, sentinel rejection, segment splitting, `rates_setpoint` version
+tolerance, missing-optional-topic handling, provenance labelling, **block-mask
+model + GE-sensitivity map, setpoint-pairing / unmatched-row / NaN-I/O
+rejection, `body_z_specific_force_proxy` naming + near-level gate**; plus a
+synthetic end-to-end write/round-trip and an integration test over the four
+sample ULogs (skips if absent). `python3 -m unittest discover -s
+system_id/tests` → **67 passed** (2026-09-07, pre-commit audit).
+
+## 5.2 Sample ULogs — OTHER-PROJECT, validation only
+
+[FACT] `landing_rl/flight_log_ulg/{03_49_26,05_34_35,06_56_24,08_53_49}.ulg`
+(gitignored via `*.ulg`). Provenance recorded as
+`source_project = OTHER_PROJECT_SAMPLE`, `dataset_role =
+PIPELINE_VALIDATION_ONLY`. They are a **`PX4_FMU_V6C` quadcopter on PX4
+`main` / `v1.17.0-alpha`** — NOT the UGRP vehicle and NOT the pinned UGRP PX4
+1.15. They are offboard **position**-mode flights (not velocity mode). All
+four parse; schema is identical across them; `esc_status` absent (handled).
+
+[CAUTION] **No numeric value derived from these logs is a UGRP parameter.**
+The MPC/MC parameters stored in each `provenance.json` are the *logged
+other-project vehicle's* controller settings, kept only as provenance. Nothing
+was written to `system_id/results/`, `landing_rl/configs/`, or any identified
+dynamics/training config.
+
+## 5.3 What is still NOT implemented
+
+`system_id/identification/`, `system_id/validation/`, `system_id/results/` are
+**empty**. No delay / velocity / attitude / rate / thrust identification, no
+validation/plotting, no exported parameter set. `IdentifiedClosedLoopDynamics`
+does not exist; `LegacyVehicleDynamics` and `PlantModel` are untouched.
 
 ---
 
@@ -582,3 +641,145 @@ instead of implied `[CONFIRMED]` fact. No new claims were added and no
 existing `[CONFIRMED]`/`[FACT]` item was found to be substantively wrong —
 this was a label-strength and section-placement correction, not a factual
 correction. No application source code was touched.
+
+### 2026-09-07 — `system_id/preprocessing/` implemented (first SI implementation phase)
+
+DATE / PHASE: 2026-09-07 — SI preprocessing pipeline (preprocessing only;
+explicitly NO parameter identification, NO dynamics backend).
+
+`[FACT]` Implemented `system_id/preprocessing/` (10 modules + package init) +
+`system_id/tests/` (7 `test_*.py` modules + `_synth.py` fixture builder + init;
+53 tests) + `system_id/__init__.py`. Added `system_id/derived/` to `.gitignore`.
+Full module/responsibility table and constants are in §5.1.
+
+IMPLEMENTATION: new files only. No file under `landing_rl/` or `mujoco_rl/`
+modified. No ROS2 / PX4 / Docker file modified. `.gitignore` gained one entry
+(`system_id/derived/`). `PROJECT_HANDOVER.md` updated (§0.6, §0.9, §0.10, §5,
+this entry).
+
+ARCHITECTURE CLARIFICATION RECORDED (from the user, this phase): the future
+grey-box model must separate **source-verified PX4 controller dynamics**
+(velocity controller; acceleration→attitude/thrust map — both defined by PX4
+source + MPC params) from **identified vehicle response** (attitude-setpoint→
+attitude, thrust-setpoint→effective thrust, optionally rate-setpoint→body-rate,
+translational residuals). The end-to-end `v_cmd → v` stays a *validation*
+mapping, not one opaque fitted plant block. Preprocessing was written to
+encode these semantics: the velocity dataset labels its setpoint column as
+`vehicle_local_position_setpoint.vx/vy/vz` (PX4 `_vel_sp`), NOT
+`trajectory_setpoint.velocity`, and records the logged MPC gains as provenance.
+
+VALIDATION:
+  * `python3 -m unittest discover -s system_id/tests -p "test_*.py"` →
+    **53 passed, 0 fail** (2026-09-07).
+  * `python3 -m unittest discover -s landing_rl/tests -p "test_*.py"` →
+    **192 passed, 0 fail**, 109.8 s — byte-identical to the §0.5 structural-
+    freeze baseline (46,958 paired steps, 5 real-checkpoint compatibility
+    tests ran and passed). **Paper/legacy behaviour unchanged.**
+  * `python3 -m system_id.preprocessing.pipeline` → all 4 sample ULogs
+    processed, outputs written to `system_id/derived/sample_other_project/`
+    (confirmed gitignored via `git check-ignore`).
+
+RESULT (data-quality gate over the 4 OTHER-PROJECT sample logs — these are
+NOT UGRP numbers; recorded only to show the pipeline runs and to characterise
+the fixtures):
+
+| log | velocity valid (strict) | attitude valid | rate valid | longest seg |
+|---|---|---|---|---|
+| 03_49_26 | ~6.6 s (1 seg) | ~9.4 s | ~10.7 s | ~2.1 s |
+| 05_34_35 | ~41 s (6 seg) | ~45.6 s | ~49.6 s | ~4.0 s |
+| 06_56_24 | ~31.7 s (3 seg) | ~35.9 s | ~39.4 s | ~2.4 s |
+| 08_53_49 | ~46.9 s (6 seg) | ~51.7 s | ~56.5 s | ~6.1 s |
+
+Excitation grades (sample logs): velocity-error→accel N/E GOOD, D
+MARGINAL/POOR; roll/pitch-setpoint→attitude MARGINAL–GOOD; roll/pitch-rate
+POOR (yaw-rate GOOD); thrust MARGINAL (near-hover, thrust-marginal airframe).
+Matches the 2026-09-06 read-only audit within grid-rate differences.
+
+`[INTERPRETATION]` The pipeline is ready to ingest real UGRP ULogs. The four
+sample logs are sufficient to exercise every code path (schema drift,
+saturation, sentinel, multi-rate, segmentation, provenance).
+
+`[CAUTION]` NOTHING has been identified. The sample logs cannot demonstrate
+the sim's Block 1 (`v_cmd → accel demand`) as defined, because they are
+offboard-position-mode, other-project flights. Roll/pitch-rate and thrust
+identification are not feasible from them regardless.
+
+`[OPEN]` UGRP identification needs dedicated flights: pinned PX4 1.15,
+offboard **velocity** mode, raised `SDLOG_PROFILE` rate for
+`vehicle_local_position_setpoint`, bounded single-axis excitation (CLAUDE.md
+§31), and the CLAUDE.md §3 gain-stabilisation precondition satisfied.
+
+`[TODO]` Next phase (needs user approval): `system_id/identification/` starting
+with attitude-setpoint→attitude and rate-setpoint→body-rate; validate (not
+fit) the PX4 velocity→accel and accel→attitude/thrust maps.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD `bc40963`, NOT
+committed. Working tree: `M .gitignore`, untracked `system_id/` (new package +
+tests) and `system_id/derived/` (gitignored outputs), plus the pre-existing
+untracked `CLAUDE_revised.md:Zone.Identifier`.
+
+UGRP NUMERIC PARAMETERS IDENTIFIED: NO.
+SAMPLE-LOG NUMBERS TRANSFERRED TO UGRP: NO.
+IDENTIFIED DYNAMICS BACKEND: NOT IMPLEMENTED.
+
+### 2026-09-07 — `system_id/preprocessing/` pre-commit consistency audit (behaviour changed)
+
+`[FACT]` Same-day follow-up to the entry above. Three reviewed issues, all
+confirmed and corrected (preprocessing only; still no identification, no
+dynamics backend; `LegacyVehicleDynamics` / `PlantModel` untouched;
+`landing_rl/` unchanged).
+
+1. **Block-specific validity masks.** The single `valid_strict` mask (which
+   excluded `in_ground_effect` for every loop) was discarding low-altitude
+   attitude/rate data that ground effect cannot contaminate. Replaced with one
+   `flight_base` mask + per-block masks: `attitude` / `rate` / `velocity_xy`
+   use `flight_base`; `velocity_z` / `thrust` / `translation` additionally
+   exclude `in_ground_effect`; `thrust` additionally requires `near_level`.
+   Segmentation and the report are now **per SI block**. `valid_core` /
+   `valid_strict` remain as read-only aliases.
+
+2. **Setpoint/measurement pairing validity.** `vehicle_local_position_setpoint`
+   ↔ `vehicle_local_position` nearest-match (±15 ms) verified on all four
+   sample logs: **100 % matched, 0 unmatched** in every log. Added an explicit
+   `setpoint_pairing_matched` aux mask; unmatched rows now force both velocity
+   block masks `False` and their `a_sp_* / v_sp_*` columns are NaN there;
+   required-I/O-finite terms fold into every block mask (a NaN input or output
+   makes that block `False`). Per-log pairing fraction is reported
+   (`report.loops.<loop>.setpoint_pairing`). New synthetic tests cover the
+   unmatched-pair and NaN-I/O rejection paths.
+
+3. **Specific-thrust proxy naming / safety.** `spec_thrust_recon` renamed to
+   **`body_z_specific_force_proxy`** (= `-vehicle_acceleration.xyz[2]`), with
+   BOTH a mandatory `near_level_valid` column/gate (tilt ≤ `NEAR_LEVEL_MAX_RAD`
+   = 10°) and an explicit metadata warning ("CRUDE proxy … NOT a calibrated
+   thrust measurement"). The `thrust` block mask is `False` wherever the
+   vehicle is tilted past the gate, so identification code cannot pick it up as
+   a generally valid thrust signal.
+
+IMPLEMENTATION: `system_id/preprocessing/{schema,masks,dataset,report,pipeline}.py`
+edited; `system_id/tests/{_synth,test_masks,test_pipeline}.py` updated;
+`system_id/tests/test_blocks_and_pairing.py` added. `SCHEMA_VERSION` /
+`PREPROCESSING_VERSION` bumped `0.1.0 → 0.2.0`. No non-`system_id/` file
+changed (`.gitignore` and this document aside).
+
+VALIDATION:
+  * `python3 -m unittest discover -s system_id/tests` → **67 passed, 0 fail**.
+  * `python3 -m unittest discover -s landing_rl/tests` → **192 passed, 0 fail**
+    (162.9 s) — structural-freeze baseline unchanged.
+  * `python3 -m system_id.preprocessing.pipeline` → all 4 sample logs
+    reprocessed; per-block report + `_block_*` / `_aux_*` npz arrays +
+    block-keyed `segments.json` written under the gitignored derived path.
+
+RESULT (sample-log data-quality gate — NOT UGRP numbers): per-block valid
+seconds now higher for attitude/rate (they keep GE samples), e.g. 08_53_49
+attitude 52.1 s / rate 57.0 s (were 51.7 / 56.5 s under the old GE-excluding
+`valid_strict`). Setpoint pairing 100 % on all four logs. Near-level gate trims
+~1–5 % of the thrust block (gentle flights).
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD `bc40963`, NOT
+committed. `M .gitignore`, `M PROJECT_HANDOVER.md`, untracked `system_id/`.
+
+UGRP NUMERIC PARAMETERS IDENTIFIED: NO.
+SAMPLE-LOG NUMBERS TRANSFERRED TO UGRP: NO.
+LEGACY DYNAMICS MODIFIED: NO.
+PLANTMODEL MODIFIED: NO.

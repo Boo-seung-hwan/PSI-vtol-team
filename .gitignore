@@ -21,6 +21,10 @@ venv/
 px4/PX4-Autopilot/
 ros2/ws/src/px4_msgs/
 
+# System-identification derived data (regenerated from raw ULogs by
+# system_id/preprocessing; never a source of truth, never committed)
+system_id/derived/
+
 # MuJoCo RL generated files
 mujoco_rl/runs/
 mujoco_rl/*.zip
