@@ -145,7 +145,12 @@ class MujocoLandingEnv(gym.Env):
         config: LandingConfig | None = None,
         sim_config: SimulationConfig | None = None,
         deterministic_physics: bool = False,
+        visualization=None,
     ):
+        """``visualization``: optional ``VisualizationConfig`` for the
+        cosmetic x500 visual shell. It has no effect on physics, the
+        controller, rewards, or the observation/action contract (verified by
+        ``tests/test_visual_physics_invariance.py``)."""
         super().__init__()
         self.physical_params = physical_params
         self.cfg = config or LandingConfig()
@@ -165,7 +170,9 @@ class MujocoLandingEnv(gym.Env):
         self.observation_noise = ObservationNoiseSampler(self.cfg)
         self.initial_state_sampler = InitialStateSampler(self.cfg)
 
-        self.mujoco_dynamics = MuJoCoDynamics(physical_params, self.cfg, self.sim_cfg)
+        self.mujoco_dynamics = MuJoCoDynamics(
+            physical_params, self.cfg, self.sim_cfg, visualization=visualization
+        )
 
         # Landing-gear standoff: the nominal landing-gear contact point
         # relative to CG, explicitly derived from geometry (never assumed

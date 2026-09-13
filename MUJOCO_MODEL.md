@@ -204,6 +204,70 @@ is confirmed unchanged (CG still reaches `ground_z_m` exactly on contact).
 
 ---
 
+## x500 visual shell (visualization only)
+
+The MuJoCo viewer can show the PX4/Gazebo **x500** airframe (frame, motor
+bases, motor bells, propellers) instead of the simple placeholder geoms. It
+is **purely cosmetic**:
+
+* derived assets: `landing_mujoco/assets/x500_visual/` (BSD-3-Clause, see
+  its `LICENSE`, `THIRD_PARTY_NOTICES.md`, `README.md`,
+  `conversion_report.json`); upstream source (not kept in this repository):
+  `https://github.com/PX4/PX4-gazebo-models.git` @
+  `d754381a1cecdd7f17050acd72bf5bf1327bced6`, `models/x500_base/` — the
+  commit PX4-Autopilot `85df8c2281c2466b30a121b22b0bf33dc69bcfe4` pins as
+  `Tools/simulation/gz`; regenerate with
+  `landing_mujoco/tools/convert_x500_visual_assets.py --source <checkout>`
+  (conversion-only environment; inputs verified against pinned sha256);
+* config: `landing_mujoco/configs/x500_visualization.yaml` (separate from the
+  physical parameter YAML; nothing in it is a physical parameter);
+* runtime: `landing_mujoco/visualization/x500_shell.py`, enabled by passing
+  `visualization=load_visualization_config(...)` to `MujocoLandingEnv` /
+  `MuJoCoDynamics` (default `None` = physics-only MJCF, byte-identical to
+  before the shell existed);
+* viewer: `landing_mujoco/tools/view_x500_visual.py` (interactive or
+  `--offscreen` PNG renders).
+
+Every shell geom is `contype=0 conaffinity=0`, geom group 2, attached to a
+body with an explicit `<inertial>`; no body, joint, actuator, option, or
+collision geom is added or changed. `tests/test_visual_physics_invariance.py`
+checks exact equality of mass/inertia/DoF/actuator/option/physics-geom data
+and ON vs OFF trajectories (free fall, hover, known body torque,
+landing/contact, deterministic and seeded-stochastic env episodes) with
+`rtol=0, atol=1e-12`; they are currently bit-identical.
+
+Transform layers are kept separate (and mirrored as nested compile-time
+MJCF `<frame>` elements):
+
+```
+converted mesh (COLLADA node transforms baked by the converter)
+  -> x500 SDF link pose + visual pose + mesh scale   = native x500 visual
+  -> UGRP display alignment: p_body = t + R (s * p_native)
+```
+
+`uniform_scale: auto` = `target_wheelbase_m / source_wheelbase_m`
+= 0.737 / 0.49214631970583705 = **1.4975221199266826**, applied consistently
+to mesh dimensions and all component offsets; `translation_body_m` and
+`rotation_rpy_rad` (FRD body frame) default to zero.
+
+**Landing gear: split shell (decision 2026-09-14).** Uniform scaling matches
+the wheelbase exactly (visual rotor hubs within 4.4e-5 m of the physical
+motor positions horizontally), but the scaled x500 landing gear would reach
+0.341 m below the body origin while the physical contact bottom is 0.140 m
+below it, i.e. the x500 skids would render ~0.20 m below the ground at rest.
+The shell therefore contains only the x500 **upper structure**; the landing
+gear shown in the viewer is the **physical contact geometry** (geom group
+0), so what you see touching the ground is exactly what MuJoCo collides.
+The converter excludes whole connected landing-gear pieces (all `Landing*`
+COLLADA components plus the carbon-fiber leg and skid tubes: pieces reaching
+below −0.10 m in the native DAE frame; margins −0.072 m / −0.206 m); no
+triangle is modified. With the shell enabled, the placeholder markers (body
+box, arm capsules, motor spheres; all collision-inert) move to hidden geom
+group 3 — the only change to non-shell MJCF elements, and it affects viewer
+visibility only.
+
+---
+
 ## Software structure
 
 ```
@@ -216,6 +280,11 @@ landing_mujoco/
                     mujoco_dynamics.py, contact.py
     envs/           mujoco_landing_env.py
     evaluation/     compare_old_vs_mujoco.py
+    visualization/  x500_shell.py                     (visual-only)
+    configs/        visualization_config.py, x500_visualization.yaml   (visual-only)
+    assets/         x500_visual/                      (derived visual bundle; upstream not vendored)
+    tools/          convert_x500_visual_assets.py (conversion-only env),
+                    view_x500_visual.py
     tests/          test_coordinate_transforms.py, test_param_schema.py,
                     test_physical_validation.py, test_sign_conventions.py,
                     test_identified_response.py,
@@ -243,6 +312,8 @@ python3 -m unittest discover -s landing_mujoco/tests -p "test_*.py"
 python3 -m landing_mujoco.check_parameter_set --parameter-set tarot680b_reference --run-smoke-episode
 python3 -m landing_mujoco.check_parameter_set --parameter-set ugrp_vehicle_measured   # fails fast, lists missing measurements
 python3 landing_mujoco/evaluation/compare_old_vs_mujoco.py
+python3 landing_mujoco/tools/view_x500_visual.py                       # interactive viewer, x500 shell
+MUJOCO_GL=osmesa python3 landing_mujoco/tools/view_x500_visual.py --offscreen out/   # headless renders
 ```
 
 ## Explicitly NOT done in this pass (see CLAUDE.md / task spec restrictions)

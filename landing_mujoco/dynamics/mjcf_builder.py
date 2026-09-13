@@ -57,6 +57,9 @@ if TYPE_CHECKING:
 LEG_CONTACT_RADIUS_M = 0.02
 ARM_MARKER_RADIUS_M = 0.012
 MOTOR_MARKER_RADIUS_M = 0.03
+# Geom group for the placeholder markers when the x500 visual shell is on
+# (MuJoCo's viewer shows groups 0-2 by default; 3 is hidden but toggleable).
+PLACEHOLDER_MARKER_GROUP_WITH_SHELL = 3
 
 
 def build_mjcf(
@@ -65,12 +68,18 @@ def build_mjcf(
     physics_dt: float,
     ground_friction_xy: float = 0.9,
     initial_altitude_m: float = 2.0,
+    visual_shell=None,
 ) -> str:
     """Return an MJCF XML string for the vehicle described by ``params``.
 
     ``initial_altitude_m`` only sets the MJCF's nominal default pose (MuJoCo
     requires *some* starting qpos); the environment overwrites qpos/qvel at
     every ``reset()`` from ``InitialStateSampler`` regardless.
+
+    ``visual_shell`` (an ``landing_mujoco.visualization.x500_shell
+    .X500VisualShell`` or None): when given, collision-inert cosmetic geoms
+    are APPENDED after every physics element has been emitted. When None
+    (default) the output is exactly the physics-only MJCF.
     """
     mp = params.mass_properties
     geom = params.geometry
@@ -134,6 +143,13 @@ def build_mjcf(
         },
     )
 
+    # With the x500 visual shell enabled, the simple placeholder markers below
+    # (collision-inert and massless under the explicit <inertial>) move to a
+    # geom group hidden by default, so the default view shows the shell plus
+    # the PHYSICAL landing-gear contact geoms (which are never modified).
+    # Without a shell, nothing here changes.
+    marker_group = {"group": str(PLACEHOLDER_MARKER_GROUP_WITH_SHELL)} if visual_shell is not None else {}
+
     # Center body -- visual/collision-disabled box sized from frame
     # footprint/height. Purely cosmetic; mass comes from <inertial> above.
     if geom.frame_footprint_m is not None and geom.frame_height_m is not None:
@@ -148,6 +164,7 @@ def build_mjcf(
                 "size": f"{lx / 2:.4f} {ly / 2:.4f} {lz / 2:.4f}",
                 "pos": "0 0 0",
                 "rgba": "0.2 0.2 0.8 0.6",
+                **marker_group,
             },
         )
 
@@ -171,6 +188,7 @@ def build_mjcf(
                     "fromto": f"0 0 0 {x:.4f} {y:.4f} {z:.4f}",
                     "size": f"{ARM_MARKER_RADIUS_M:.4f}",
                     "rgba": "0.1 0.1 0.1 1",
+                    **marker_group,
                 },
             )
             ET.SubElement(
@@ -182,6 +200,7 @@ def build_mjcf(
                     "pos": f"{x:.4f} {y:.4f} {z:.4f}",
                     "size": f"{MOTOR_MARKER_RADIUS_M:.4f}",
                     "rgba": "0.8 0.1 0.1 1",
+                    **marker_group,
                 },
             )
 
@@ -203,6 +222,9 @@ def build_mjcf(
                     "rgba": "0.9 0.6 0.1 1",
                 },
             )
+
+    if visual_shell is not None:
+        visual_shell.append_to_mjcf(mujoco_el, vehicle)
 
     xml_bytes = ET.tostring(mujoco_el, encoding="unicode")
     return minidom.parseString(xml_bytes).toprettyxml(indent="  ")

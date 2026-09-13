@@ -1,0 +1,651 @@
+{
+  "schema_version": 2,
+  "description": "Native (unscaled) x500 visual assembly, transcribed programmatically from the upstream SDF. Visual-only: contains no physical parameters.",
+  "upstream": {
+    "repository": "https://github.com/PX4/PX4-gazebo-models.git",
+    "commit": "d754381a1cecdd7f17050acd72bf5bf1327bced6"
+  },
+  "frame": "x500_base SDF model frame: +x forward, +y left, +z up, meters",
+  "pose_convention": "SDF [x y z roll pitch yaw]; R = Rz(yaw) Ry(pitch) Rx(roll)",
+  "composition": "p_model = T_link( T_visual( mesh_scale * p_mesh ) ); p_mesh already includes the baked COLLADA node transform",
+  "landing_gear_representation": "physical_contact_geoms: x500 landing-gear pieces are excluded from this bundle (see conversion_report.json landing_gear_partition)",
+  "source_sdf": "models/x500_base/model.sdf",
+  "source_sdf_sha256": "f0f04e4314eebde287eea2b0a962e31a9009f1d98470734a8137e888f78c5bf9",
+  "meshes": {
+    "motor_base_5010_stator": {
+      "file": "meshes/motor_base_5010_stator.obj",
+      "material": {
+        "rgba": [
+          0.25,
+          0.25,
+          0.25,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/5010Base.dae",
+        "geometry_id": "Body1_001-mesh",
+        "node_path": "Stator_001/Stator",
+        "pieces": "all"
+      }
+    },
+    "motor_bell_5010_side": {
+      "file": "meshes/motor_bell_5010_side.obj",
+      "material": {
+        "rgba": [
+          0.03106355,
+          0.03106355,
+          0.03106355,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/5010Bell.dae",
+        "geometry_id": "Body1-mesh",
+        "node_path": "BellSide/Bellside",
+        "pieces": "all"
+      }
+    },
+    "motor_bell_5010_head": {
+      "file": "meshes/motor_bell_5010_head.obj",
+      "material": {
+        "rgba": [
+          0.25,
+          0.25,
+          0.25,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/5010Bell.dae",
+        "geometry_id": "Body2-mesh",
+        "node_path": "BellHead/BellHead_001",
+        "pieces": "all"
+      }
+    },
+    "frame_carbon_fiber_upper": {
+      "file": "meshes/frame_carbon_fiber_upper.obj",
+      "material": {
+        "rgba": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "texture": "textures/cf.png"
+      },
+      "source": {
+        "file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+        "geometry_id": "CarbonFiber-mesh",
+        "node_path": "CarbonFiber",
+        "pieces": "upper_structure pieces only"
+      }
+    },
+    "frame_metal": {
+      "file": "meshes/frame_metal.obj",
+      "material": {
+        "rgba": [
+          0.3185468,
+          0.3185468,
+          0.3185468,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+        "geometry_id": "Metal-mesh",
+        "node_path": "Metal",
+        "pieces": "all"
+      }
+    },
+    "frame_rails_rubber": {
+      "file": "meshes/frame_rails_rubber.obj",
+      "material": {
+        "rgba": [
+          0.1004815,
+          0.1004815,
+          0.1004815,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+        "geometry_id": "RailsRubber-mesh",
+        "node_path": "RailsRubber",
+        "pieces": "all"
+      }
+    },
+    "frame_fmuk66": {
+      "file": "meshes/frame_fmuk66.obj",
+      "material": {
+        "rgba": [
+          0.9960784,
+          0.9960784,
+          0.9960784,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+        "geometry_id": "FMUK66-mesh",
+        "node_path": "FMUK66",
+        "pieces": "all"
+      }
+    },
+    "frame_antenna_holder": {
+      "file": "meshes/frame_antenna_holder.obj",
+      "material": {
+        "rgba": [
+          0.9568627,
+          0.9568627,
+          0.0,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+        "geometry_id": "RailsAntennaHolder-mesh",
+        "node_path": "RailsAntennaHolder",
+        "pieces": "all"
+      }
+    },
+    "frame_fmu_rubber": {
+      "file": "meshes/frame_fmu_rubber.obj",
+      "material": {
+        "rgba": [
+          0.1882353,
+          0.2313726,
+          0.5882354,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+        "geometry_id": "FMURubber-mesh",
+        "node_path": "FMURubber",
+        "pieces": "all"
+      }
+    },
+    "prop_1345_ccw": {
+      "file": "meshes/prop_1345_ccw.stl",
+      "material": {
+        "rgba": [
+          0.175,
+          0.175,
+          0.175,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/1345_prop_ccw.stl",
+        "sdf_material_script": "Gazebo/DarkGrey"
+      }
+    },
+    "prop_1345_cw": {
+      "file": "meshes/prop_1345_cw.stl",
+      "material": {
+        "rgba": [
+          0.175,
+          0.175,
+          0.175,
+          1.0
+        ]
+      },
+      "source": {
+        "file": "models/x500_base/meshes/1345_prop_cw.stl",
+        "sdf_material_script": "Gazebo/DarkGrey"
+      }
+    }
+  },
+  "visual_instances": [
+    {
+      "name": "base_link_visual",
+      "link": "base_link",
+      "link_pose_xyzrpy": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.0,
+        0.0,
+        0.025,
+        0.0,
+        0.0,
+        3.141592654
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/NXP-HGD-CF.dae",
+      "meshes": [
+        "frame_carbon_fiber_upper",
+        "frame_metal",
+        "frame_rails_rubber",
+        "frame_fmuk66",
+        "frame_antenna_holder",
+        "frame_fmu_rubber"
+      ]
+    },
+    {
+      "name": "5010_motor_base_0",
+      "link": "base_link",
+      "link_pose_xyzrpy": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.174,
+        0.174,
+        0.032,
+        0.0,
+        0.0,
+        -0.45
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Base.dae",
+      "meshes": [
+        "motor_base_5010_stator"
+      ]
+    },
+    {
+      "name": "5010_motor_base_1",
+      "link": "base_link",
+      "link_pose_xyzrpy": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        -0.174,
+        0.174,
+        0.032,
+        0.0,
+        0.0,
+        -0.45
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Base.dae",
+      "meshes": [
+        "motor_base_5010_stator"
+      ]
+    },
+    {
+      "name": "5010_motor_base_2",
+      "link": "base_link",
+      "link_pose_xyzrpy": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.174,
+        -0.174,
+        0.032,
+        0.0,
+        0.0,
+        -0.45
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Base.dae",
+      "meshes": [
+        "motor_base_5010_stator"
+      ]
+    },
+    {
+      "name": "5010_motor_base_3",
+      "link": "base_link",
+      "link_pose_xyzrpy": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        -0.174,
+        -0.174,
+        0.032,
+        0.0,
+        0.0,
+        -0.45
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Base.dae",
+      "meshes": [
+        "motor_base_5010_stator"
+      ]
+    },
+    {
+      "name": "rotor_0_visual",
+      "link": "rotor_0",
+      "link_pose_xyzrpy": [
+        0.174,
+        -0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        -0.022,
+        -0.14638461538461536,
+        -0.016,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        0.8461538461538461,
+        0.8461538461538461,
+        0.8461538461538461
+      ],
+      "source_uri": "model://x500_base/meshes/1345_prop_ccw.stl",
+      "meshes": [
+        "prop_1345_ccw"
+      ]
+    },
+    {
+      "name": "rotor_0_visual_motor_bell",
+      "link": "rotor_0",
+      "link_pose_xyzrpy": [
+        0.174,
+        -0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.0,
+        0.0,
+        -0.032,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Bell.dae",
+      "meshes": [
+        "motor_bell_5010_side",
+        "motor_bell_5010_head"
+      ]
+    },
+    {
+      "name": "rotor_1_visual",
+      "link": "rotor_1",
+      "link_pose_xyzrpy": [
+        -0.174,
+        0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        -0.022,
+        -0.14638461538461536,
+        -0.016,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        0.8461538461538461,
+        0.8461538461538461,
+        0.8461538461538461
+      ],
+      "source_uri": "model://x500_base/meshes/1345_prop_ccw.stl",
+      "meshes": [
+        "prop_1345_ccw"
+      ]
+    },
+    {
+      "name": "rotor_1_visual_motor_top",
+      "link": "rotor_1",
+      "link_pose_xyzrpy": [
+        -0.174,
+        0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.0,
+        0.0,
+        -0.032,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Bell.dae",
+      "meshes": [
+        "motor_bell_5010_side",
+        "motor_bell_5010_head"
+      ]
+    },
+    {
+      "name": "rotor_2_visual",
+      "link": "rotor_2",
+      "link_pose_xyzrpy": [
+        0.174,
+        0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        -0.022,
+        -0.14638461538461536,
+        -0.016,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        0.8461538461538461,
+        0.8461538461538461,
+        0.8461538461538461
+      ],
+      "source_uri": "model://x500_base/meshes/1345_prop_cw.stl",
+      "meshes": [
+        "prop_1345_cw"
+      ]
+    },
+    {
+      "name": "rotor_2_visual_motor_top",
+      "link": "rotor_2",
+      "link_pose_xyzrpy": [
+        0.174,
+        0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.0,
+        0.0,
+        -0.032,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Bell.dae",
+      "meshes": [
+        "motor_bell_5010_side",
+        "motor_bell_5010_head"
+      ]
+    },
+    {
+      "name": "rotor_3_visual",
+      "link": "rotor_3",
+      "link_pose_xyzrpy": [
+        -0.174,
+        -0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        -0.022,
+        -0.14638461538461536,
+        -0.016,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        0.8461538461538461,
+        0.8461538461538461,
+        0.8461538461538461
+      ],
+      "source_uri": "model://x500_base/meshes/1345_prop_cw.stl",
+      "meshes": [
+        "prop_1345_cw"
+      ]
+    },
+    {
+      "name": "rotor_3_visual_motor_top",
+      "link": "rotor_3",
+      "link_pose_xyzrpy": [
+        -0.174,
+        -0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "visual_pose_xyzrpy": [
+        0.0,
+        0.0,
+        -0.032,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "mesh_scale_xyz": [
+        1.0,
+        1.0,
+        1.0
+      ],
+      "source_uri": "model://x500_base/meshes/5010Bell.dae",
+      "meshes": [
+        "motor_bell_5010_side",
+        "motor_bell_5010_head"
+      ]
+    }
+  ],
+  "rotor_links": [
+    {
+      "name": "rotor_0",
+      "pose_xyzrpy": [
+        0.174,
+        -0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rotor_1",
+      "pose_xyzrpy": [
+        -0.174,
+        0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rotor_2",
+      "pose_xyzrpy": [
+        0.174,
+        0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "name": "rotor_3",
+      "pose_xyzrpy": [
+        -0.174,
+        -0.174,
+        0.06,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "not_integrated_visuals": [
+    {
+      "visual": "NXP_FMUK66_FRONT",
+      "link": "base_link",
+      "reason": "decorative textured <plane> decal (0.013 x 0.007 m, nxp.png PBR albedo); not a mesh"
+    },
+    {
+      "visual": "NXP_FMUK66_TOP",
+      "link": "base_link",
+      "reason": "decorative textured <plane> decal (0.013 x 0.007 m, nxp.png PBR albedo); not a mesh"
+    },
+    {
+      "visual": "RDDRONE_FMUK66_TOP",
+      "link": "base_link",
+      "reason": "decorative textured <plane> decal (0.032 x 0.0034 m, rd.png PBR albedo); not a mesh"
+    }
+  ]
+}

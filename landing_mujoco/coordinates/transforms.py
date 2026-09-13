@@ -143,3 +143,43 @@ def mujoco_quaternion_to_policy_euler(quat: np.ndarray) -> tuple[float, float, f
     r_mj = r_mj.reshape(3, 3)
     r_ned = REFLECT @ r_mj @ REFLECT
     return euler_from_rotation_ned(r_ned)
+
+
+# ---------------------------------------------------------------------------
+# Visualization-only conventions (x500 visual shell). No physics code uses
+# these; they live here so that every frame convention stays in one file.
+# ---------------------------------------------------------------------------
+
+# The Gazebo/SDF x500 model frame is FLU (+x forward, +y left, +z up), which
+# is exactly the MuJoCo vehicle body frame chosen above. The native x500
+# visual assembly is therefore placed WITHOUT any axis remapping.
+SDF_MODEL_FLU_TO_MUJOCO_BODY = np.eye(3, dtype=np.float64)
+
+
+def sdf_pose_matrix(pose_xyzrpy) -> np.ndarray:
+    """4x4 homogeneous transform for an SDF ``<pose>x y z roll pitch yaw</pose>``.
+
+    SDF uses the same fixed-axis Rz(yaw).Ry(pitch).Rx(roll) composition as
+    ``rotation_body_to_world_ned``; that function is reused purely as the
+    generic rotation builder (no NED meaning here)."""
+    x, y, z, roll, pitch, yaw = (float(v) for v in pose_xyzrpy)
+    t = np.eye(4, dtype=np.float64)
+    t[:3, :3] = rotation_body_to_world_ned(roll, pitch, yaw)
+    t[:3, 3] = (x, y, z)
+    return t
+
+
+def frd_body_offset_to_mujoco_body(translation_frd, rotation_rpy_frd) -> tuple[np.ndarray, np.ndarray]:
+    """A rigid body-fixed offset expressed in the FRD policy body frame
+    (translation [m] + roll/pitch/yaw [rad], Rz.Ry.Rx) -> the same offset in
+    the MuJoCo (FLU) body frame: (translation, 3x3 rotation)."""
+    t_mj = frd_vector_to_mujoco_body(translation_frd)
+    r_frd = rotation_body_to_world_ned(*(float(a) for a in rotation_rpy_frd))
+    return t_mj, REFLECT @ r_frd @ REFLECT
+
+
+def rotation_matrix_to_mujoco_quaternion(rot: np.ndarray) -> np.ndarray:
+    """3x3 rotation -> MuJoCo (w, x, y, z) quaternion."""
+    quat = np.zeros(4, dtype=np.float64)
+    mujoco.mju_mat2Quat(quat, np.asarray(rot, dtype=np.float64).flatten())
+    return quat

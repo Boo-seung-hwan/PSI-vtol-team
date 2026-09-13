@@ -1,0 +1,2964 @@
+{
+  "schema_version": 2,
+  "tool": {
+    "script": "landing_mujoco/tools/convert_x500_visual_assets.py",
+    "version": "1.1.0"
+  },
+  "conversion_environment": {
+    "note": "disposable venv; these packages are NOT runtime/training dependencies",
+    "python": "3.10.12",
+    "trimesh": "5.1.0",
+    "pycollada": "0.9.3",
+    "Pillow": "12.3.0"
+  },
+  "upstream_source": {
+    "repository": "https://github.com/PX4/PX4-gazebo-models.git",
+    "commit": "d754381a1cecdd7f17050acd72bf5bf1327bced6",
+    "referenced_by": {
+      "repository": "PX4-Autopilot",
+      "commit": "85df8c2281c2466b30a121b22b0bf33dc69bcfe4",
+      "submodule_path": "Tools/simulation/gz"
+    },
+    "model_paths_involved": [
+      "models/x500_base",
+      "models/x500",
+      "models/x500_depth",
+      "models/OakD-Lite"
+    ]
+  },
+  "source_verification": {
+    "content_pins": {
+      "models/x500_base/model.sdf": {
+        "sha256": "f0f04e4314eebde287eea2b0a962e31a9009f1d98470734a8137e888f78c5bf9",
+        "pinned_sha256": "f0f04e4314eebde287eea2b0a962e31a9009f1d98470734a8137e888f78c5bf9",
+        "matches_pin": true
+      },
+      "models/x500_base/LICENSE": {
+        "sha256": "cee4ef94e73cd38fb2886f5d7e7a04d6488f54b1e70cd8b1b29d74f38bfdba5b",
+        "pinned_sha256": "cee4ef94e73cd38fb2886f5d7e7a04d6488f54b1e70cd8b1b29d74f38bfdba5b",
+        "matches_pin": true
+      },
+      "models/x500_base/meshes/NXP-HGD-CF.dae": {
+        "sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+        "pinned_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+        "matches_pin": true
+      },
+      "models/x500_base/meshes/5010Base.dae": {
+        "sha256": "798396a1945c7ff55a0840b77869e27affdd35fed0d784fff96b68f50f160ea0",
+        "pinned_sha256": "798396a1945c7ff55a0840b77869e27affdd35fed0d784fff96b68f50f160ea0",
+        "matches_pin": true
+      },
+      "models/x500_base/meshes/5010Bell.dae": {
+        "sha256": "b90a1b2dd63a8ebbe1f3339ed18cef23673e0d8f03314fd9b9533a68b6b66668",
+        "pinned_sha256": "b90a1b2dd63a8ebbe1f3339ed18cef23673e0d8f03314fd9b9533a68b6b66668",
+        "matches_pin": true
+      },
+      "models/x500_base/meshes/1345_prop_ccw.stl": {
+        "sha256": "ba197e0961117a3462b555d65edf3433ba8ff5691624100a185242cb5f456244",
+        "pinned_sha256": "ba197e0961117a3462b555d65edf3433ba8ff5691624100a185242cb5f456244",
+        "matches_pin": true
+      },
+      "models/x500_base/meshes/1345_prop_cw.stl": {
+        "sha256": "7aa4b61c1ddc5304c9c1f5602eacf5e2ec5eafb95dd1f2a3368342f256122fc0",
+        "pinned_sha256": "7aa4b61c1ddc5304c9c1f5602eacf5e2ec5eafb95dd1f2a3368342f256122fc0",
+        "matches_pin": true
+      },
+      "models/x500_base/meshes/CF.png": {
+        "sha256": "3a56ec48eeaaf7774e8d3e8e5e88f6973bfa5652c610974c3eb2dbec6ec85944",
+        "pinned_sha256": "3a56ec48eeaaf7774e8d3e8e5e88f6973bfa5652c610974c3eb2dbec6ec85944",
+        "matches_pin": true
+      }
+    },
+    "all_content_pins_match": true,
+    "git": {
+      "available": true,
+      "head": "d754381a1cecdd7f17050acd72bf5bf1327bced6",
+      "head_is_pinned_commit": true,
+      "origin": "https://github.com/PX4/PX4-gazebo-models.git",
+      "model_paths_status_porcelain": "",
+      "model_paths_clean": true,
+      "model_paths_diff_vs_pinned_commit": "",
+      "model_paths_identical_to_pinned_commit": true
+    },
+    "note": "content pins are authoritative; git fields are recorded when the source is a git checkout"
+  },
+  "pinned_source_verified": true,
+  "conversion_source_local_path": "/home/qntmdghkss/drone_stack/px4/PX4-Autopilot/Tools/simulation/gz/models",
+  "formatting_precision": {
+    "xyz_decimal_places": 8,
+    "uv_decimal_places": 8,
+    "normal_decimal_places": 8,
+    "note": "text-format precision reduction only; no decimation"
+  },
+  "acceptance_gates": {
+    "max_position_deviation_m": 1e-07,
+    "max_uv_deviation": 1e-07,
+    "max_normal_component_deviation": 1e-07,
+    "textured_component_uv_vs_trimesh": 1e-07
+  },
+  "scope": {
+    "converted": "x500 body visual shell: frame upper structure (NXP-HGD-CF.dae), motor bases (5010Base.dae), motor bells (5010Bell.dae), propellers (1345_prop_*.stl, copied)",
+    "not_converted": [
+      "OakD-Lite (camera; out of scope)",
+      "x500 landing gear (see landing_gear_partition)"
+    ],
+    "physics_data_ignored": "SDF collision, inertial, sensor, joint and plugin elements are never read into the bundle; the bundle carries no mass, inertia, CG, motor, thrust, contact or sensor parameters"
+  },
+  "sdf_visual_assembly": {
+    "source": "models/x500_base/model.sdf",
+    "model_name": "x500_base",
+    "model_pose_xyzrpy": [
+      0.0,
+      0.0,
+      0.24,
+      0.0,
+      0.0,
+      0.0
+    ],
+    "model_pose_handling": "NOT applied: x500_base's model <pose> is its standalone spawn pose; x500 includes x500_base with merge='true' and all visuals are link-relative",
+    "ignored_non_visual_elements": {
+      "collision": 9,
+      "inertial": 5,
+      "sensor": 3,
+      "joint": 4,
+      "plugin": 0
+    }
+  },
+  "landing_gear_partition": {
+    "decision": "2026-09-14 (user-approved): x500 landing gear hidden; landing gear represented in the MuJoCo viewer by the physical contact geoms",
+    "rule": "whole connected piece is landing gear if its COLLADA geometry id starts with 'Landing' OR its minimum z < -0.1 m in the native DAE frame",
+    "connectivity": "shared vertices, positions merged at 9 decimals",
+    "geometry_modified": false,
+    "components": {
+      "motor_base_5010_stator": {
+        "source_geometry_id": "Body1_001-mesh",
+        "source_triangles": 3776,
+        "exported_triangles": 3776,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 3776,
+            "bounds_m": [
+              [
+                -0.01431094018419965,
+                -0.014310942327383894,
+                -0.007000004142168426
+              ],
+              [
+                0.01431094018419965,
+                0.014310939031265941,
+                0.011000003601851924
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "motor_bell_5010_side": {
+        "source_geometry_id": "Body1-mesh",
+        "source_triangles": 712,
+        "exported_triangles": 712,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 712,
+            "bounds_m": [
+              [
+                -0.029499999817460765,
+                -0.029499999778221517,
+                -9.221282002814877e-09
+              ],
+              [
+                0.029499999817460765,
+                0.029500003859129122,
+                0.013000008453872213
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "motor_bell_5010_head": {
+        "source_geometry_id": "Body2-mesh",
+        "source_triangles": 3206,
+        "exported_triangles": 3206,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 3206,
+            "bounds_m": [
+              [
+                -0.029499999817460765,
+                -0.029499995697313486,
+                0.012999990011308206
+              ],
+              [
+                0.029499999817460765,
+                0.029500004321181977,
+                0.02100000159838039
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "frame_landing_foam": {
+        "source_geometry_id": "LandingFoam-mesh",
+        "source_triangles": 4992,
+        "exported_triangles": 0,
+        "excluded_landing_gear_triangles": 4992,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 1248,
+            "bounds_m": [
+              [
+                -0.11259999871253967,
+                -0.14205099642276764,
+                -0.2525266110897064
+              ],
+              [
+                -0.02259998954832554,
+                -0.12205100059509277,
+                -0.23267239332199097
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingFoam-mesh' is a Landing* component; piece reaches z=-0.2525 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 1,
+            "triangles": 1248,
+            "bounds_m": [
+              [
+                -0.11259999871253967,
+                0.12255100160837173,
+                -0.2525266110897064
+              ],
+              [
+                -0.02259998954832554,
+                0.1425510048866272,
+                -0.23267239332199097
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingFoam-mesh' is a Landing* component; piece reaches z=-0.2525 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 2,
+            "triangles": 1248,
+            "bounds_m": [
+              [
+                0.02199994958937168,
+                -0.14205099642276764,
+                -0.2525266110897064
+              ],
+              [
+                0.1120000034570694,
+                -0.12205100059509277,
+                -0.23267239332199097
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingFoam-mesh' is a Landing* component; piece reaches z=-0.2525 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 3,
+            "triangles": 1248,
+            "bounds_m": [
+              [
+                0.02199994958937168,
+                0.12255100160837173,
+                -0.2525266110897064
+              ],
+              [
+                0.1120000034570694,
+                0.1425510048866272,
+                -0.23267239332199097
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingFoam-mesh' is a Landing* component; piece reaches z=-0.2525 m < -0.1 m (native DAE frame)"
+          }
+        ]
+      },
+      "frame_landing_rubber": {
+        "source_geometry_id": "LandingRubber-mesh",
+        "source_triangles": 4144,
+        "exported_triangles": 0,
+        "excluded_landing_gear_triangles": 4144,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 1036,
+            "bounds_m": [
+              [
+                -0.1274486929178238,
+                -0.13757550716400146,
+                -0.24808380007743835
+              ],
+              [
+                -0.11259999871253967,
+                -0.12652650475502014,
+                -0.2371152937412262
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingRubber-mesh' is a Landing* component; piece reaches z=-0.2481 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 1,
+            "triangles": 1036,
+            "bounds_m": [
+              [
+                -0.1274486929178238,
+                0.12702639400959015,
+                -0.24808380007743835
+              ],
+              [
+                -0.11259999871253967,
+                0.13807550072669983,
+                -0.2371152937412262
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingRubber-mesh' is a Landing* component; piece reaches z=-0.2481 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 2,
+            "triangles": 1036,
+            "bounds_m": [
+              [
+                0.1120000034570694,
+                -0.13757550716400146,
+                -0.24808380007743835
+              ],
+              [
+                0.12684859335422516,
+                -0.12652650475502014,
+                -0.2371152937412262
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingRubber-mesh' is a Landing* component; piece reaches z=-0.2481 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 3,
+            "triangles": 1036,
+            "bounds_m": [
+              [
+                0.1120000034570694,
+                0.12702639400959015,
+                -0.24808380007743835
+              ],
+              [
+                0.12684859335422516,
+                0.13807550072669983,
+                -0.2371152937412262
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingRubber-mesh' is a Landing* component; piece reaches z=-0.2481 m < -0.1 m (native DAE frame)"
+          }
+        ]
+      },
+      "frame_carbon_fiber": {
+        "source_geometry_id": "CarbonFiber-mesh",
+        "source_triangles": 28332,
+        "exported_triangles": 26956,
+        "excluded_landing_gear_triangles": 1376,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                -0.12529990077018738,
+                -0.13705100119113922,
+                -0.24756309390068054
+              ],
+              [
+                0.12470000237226486,
+                -0.12705090641975403,
+                -0.237635999917984
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "piece reaches z=-0.2476 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 1,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                -0.12529990077018738,
+                0.12755100429058075,
+                -0.24756309390068054
+              ],
+              [
+                0.12470000237226486,
+                0.13755099475383759,
+                -0.237635999917984
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "piece reaches z=-0.2476 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 2,
+            "triangles": 480,
+            "bounds_m": [
+              [
+                -0.00829994585365057,
+                -0.1251101940870285,
+                -0.20574240386486053
+              ],
+              [
+                0.007699965965002775,
+                -0.046911001205444336,
+                -0.026466840878129005
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "piece reaches z=-0.2057 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 3,
+            "triangles": 480,
+            "bounds_m": [
+              [
+                -0.00829994585365057,
+                0.047410961240530014,
+                -0.20574240386486053
+              ],
+              [
+                0.007699965965002775,
+                0.12561020255088806,
+                -0.026466840878129005
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "piece reaches z=-0.2057 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 4,
+            "triangles": 1148,
+            "bounds_m": [
+              [
+                -0.048960860818624496,
+                -0.019499950110912323,
+                -0.07161395996809006
+              ],
+              [
+                0.051039088517427444,
+                0.020500000566244125,
+                -0.0696139931678772
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 5,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                -0.15395000576972961,
+                -0.03499995917081833,
+                -0.04457753151655197
+              ],
+              [
+                0.0960499569773674,
+                -0.024999970570206642,
+                -0.03465044125914574
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 6,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                -0.15395000576972961,
+                0.024999970570206642,
+                -0.04457753151655197
+              ],
+              [
+                0.0960499569773674,
+                0.03499995917081833,
+                -0.03465044125914574
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 7,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                -0.19796819984912872,
+                0.15141190588474274,
+                -0.026467619463801384
+              ],
+              [
+                -0.1511082947254181,
+                0.198271706700325,
+                -0.024467580020427704
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 8,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                0.15050829946994781,
+                -0.19777169823646545,
+                -0.026467619463801384
+              ],
+              [
+                0.1973681002855301,
+                -0.15091189742088318,
+                -0.024467580020427704
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 9,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                0.15086190402507782,
+                0.15105830132961273,
+                -0.026467619463801384
+              ],
+              [
+                0.1977217048406601,
+                0.19791820645332336,
+                -0.024467580020427704
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 10,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                -0.19796819984912872,
+                -0.19777169823646545,
+                -0.026403600350022316
+              ],
+              [
+                -0.1511082947254181,
+                -0.15091189742088318,
+                -0.024403570219874382
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 11,
+            "triangles": 3760,
+            "bounds_m": [
+              [
+                -0.15934999287128448,
+                -0.0404999814927578,
+                -0.026363959535956383
+              ],
+              [
+                -0.09184998273849487,
+                0.0404999814927578,
+                -0.024363990873098373
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 12,
+            "triangles": 5392,
+            "bounds_m": [
+              [
+                -0.07429999113082886,
+                -0.07374995201826096,
+                -0.026363959535956383
+              ],
+              [
+                0.073699951171875,
+                0.0742499828338623,
+                -0.024363990873098373
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 13,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                -0.1948920041322708,
+                0.04246044158935547,
+                -0.021155649796128273
+              ],
+              [
+                -0.042156871408224106,
+                0.19519540667533875,
+                -0.005272268783301115
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 14,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                0.041556891053915024,
+                -0.19469550251960754,
+                -0.021155649796128273
+              ],
+              [
+                0.19429199397563934,
+                -0.04196041077375412,
+                -0.005272268783301115
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 15,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                0.041910458356142044,
+                0.042106859385967255,
+                -0.021155649796128273
+              ],
+              [
+                0.194645494222641,
+                0.19484199583530426,
+                -0.005272268783301115
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 16,
+            "triangles": 208,
+            "bounds_m": [
+              [
+                -0.1948920041322708,
+                -0.19469550251960754,
+                -0.021091630682349205
+              ],
+              [
+                -0.042156871408224106,
+                -0.04196041077375412,
+                -0.005208312999457121
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 17,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                -0.19796819984912872,
+                0.15141190588474274,
+                -0.0021035668905824423
+              ],
+              [
+                -0.1511082947254181,
+                0.198271706700325,
+                -0.00010361699969507754
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 18,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                0.15050829946994781,
+                -0.19777169823646545,
+                -0.0021035668905824423
+              ],
+              [
+                0.1973681002855301,
+                -0.15091189742088318,
+                -0.00010361699969507754
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 19,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                0.15086190402507782,
+                0.15105830132961273,
+                -0.0021035668905824423
+              ],
+              [
+                0.1977217048406601,
+                0.19791820645332336,
+                -0.00010361699969507754
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 20,
+            "triangles": 652,
+            "bounds_m": [
+              [
+                -0.19796819984912872,
+                -0.19777169823646545,
+                -0.002039611106738448
+              ],
+              [
+                -0.1511082947254181,
+                -0.15091189742088318,
+                -3.961989932577126e-05
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 21,
+            "triangles": 7620,
+            "bounds_m": [
+              [
+                -0.07429999113082886,
+                -0.07374995201826096,
+                -0.0019999740179628134
+              ],
+              [
+                0.073699951171875,
+                0.0742499828338623,
+                0.0
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 22,
+            "triangles": 2572,
+            "bounds_m": [
+              [
+                -0.03492825850844383,
+                -0.03257422894239426,
+                0.007769941817969084
+              ],
+              [
+                0.03304367884993553,
+                0.03342609852552414,
+                0.009269951842725277
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "frame_metal": {
+        "source_geometry_id": "Metal-mesh",
+        "source_triangles": 14328,
+        "exported_triangles": 14328,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 1052,
+            "bounds_m": [
+              [
+                -0.038949958980083466,
+                -0.034807078540325165,
+                -0.0696139931678772
+              ],
+              [
+                -0.02894997037947178,
+                0.034807078540325165,
+                -0.03215599060058594
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 1,
+            "triangles": 1052,
+            "bounds_m": [
+              [
+                0.031049959361553192,
+                -0.034807078540325165,
+                -0.0696139931678772
+              ],
+              [
+                0.04104994982481003,
+                0.034807078540325165,
+                -0.03215599060058594
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 2,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                -0.14560000598430634,
+                -0.03974996879696846,
+                -0.04929285869002342
+              ],
+              [
+                -0.1395999938249588,
+                -0.02024995908141136,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 3,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                -0.14560000598430634,
+                0.02024995908141136,
+                -0.04929285869002342
+              ],
+              [
+                -0.1395999938249588,
+                0.03974996879696846,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 4,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                -0.11159999668598175,
+                -0.03974996879696846,
+                -0.04929285869002342
+              ],
+              [
+                -0.10559990257024765,
+                -0.02024995908141136,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 5,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                -0.11159999668598175,
+                0.02024995908141136,
+                -0.04929285869002342
+              ],
+              [
+                -0.10559990257024765,
+                0.03974996879696846,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 6,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                -0.05329995974898338,
+                -0.03974996879696846,
+                -0.04929285869002342
+              ],
+              [
+                -0.047299981117248535,
+                -0.02024995908141136,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 7,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                -0.05329995974898338,
+                0.02024995908141136,
+                -0.04929285869002342
+              ],
+              [
+                -0.047299981117248535,
+                0.03974996879696846,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 8,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                0.04670000076293945,
+                -0.03974996879696846,
+                -0.04929285869002342
+              ],
+              [
+                0.0526999793946743,
+                -0.02024995908141136,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 9,
+            "triangles": 376,
+            "bounds_m": [
+              [
+                0.04670000076293945,
+                0.02024995908141136,
+                -0.04929285869002342
+              ],
+              [
+                0.0526999793946743,
+                0.03974996879696846,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 10,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.19734230637550354,
+                0.17466500401496887,
+                -0.024467580020427704
+              ],
+              [
+                -0.17436149716377258,
+                0.19764600694179535,
+                -0.013317580334842205
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 11,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.17471499741077423,
+                0.1520376056432724,
+                -0.024467580020427704
+              ],
+              [
+                -0.1517339050769806,
+                0.17501859366893768,
+                -0.013317580334842205
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 12,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.15113399922847748,
+                -0.17451860010623932,
+                -0.024467580020427704
+              ],
+              [
+                0.17411500215530396,
+                -0.15153749287128448,
+                -0.013317580334842205
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 13,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.15148760378360748,
+                0.1516840010881424,
+                -0.024467580020427704
+              ],
+              [
+                0.17446860671043396,
+                0.17466500401496887,
+                -0.013317580334842205
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 14,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.1737615019083023,
+                -0.19714589416980743,
+                -0.024467580020427704
+              ],
+              [
+                0.19674240052700043,
+                -0.17416499555110931,
+                -0.013317580334842205
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 15,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.17411500215530396,
+                0.17431150376796722,
+                -0.024467580020427704
+              ],
+              [
+                0.19709600508213043,
+                0.19729240238666534,
+                -0.013317580334842205
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 16,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.19734230637550354,
+                -0.19714589416980743,
+                -0.024403570219874382
+              ],
+              [
+                -0.17436149716377258,
+                -0.17416499555110931,
+                -0.013253560289740562
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 17,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.17471499741077423,
+                -0.17451860010623932,
+                -0.024403570219874382
+              ],
+              [
+                -0.1517339050769806,
+                -0.15153749287128448,
+                -0.013253560289740562
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 18,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.0688893124461174,
+                -0.06869286298751831,
+                -0.024363990873098373
+              ],
+              [
+                -0.04590839147567749,
+                -0.045711930841207504,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 19,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.0688893124461174,
+                0.04621189087629318,
+                -0.024363990873098373
+              ],
+              [
+                -0.04590839147567749,
+                0.06919287890195847,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 20,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.06252539157867432,
+                -0.06232893094420433,
+                -0.024363990873098373
+              ],
+              [
+                -0.039544399827718735,
+                -0.03934793919324875,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 21,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.06252539157867432,
+                0.0398479700088501,
+                -0.024363990873098373
+              ],
+              [
+                -0.039544399827718735,
+                0.06282895058393478,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 22,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.03894441947340965,
+                -0.06232893094420433,
+                -0.024363990873098373
+              ],
+              [
+                0.06192535161972046,
+                -0.03934793919324875,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 23,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.039297930896282196,
+                0.03949439153075218,
+                -0.024363990873098373
+              ],
+              [
+                0.06227891892194748,
+                0.062475379556417465,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 24,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.04530835151672363,
+                -0.06869286298751831,
+                -0.024363990873098373
+              ],
+              [
+                0.06828933209180832,
+                -0.045711930841207504,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 25,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.04566191881895065,
+                0.04585837945342064,
+                -0.024363990873098373
+              ],
+              [
+                0.06864290684461594,
+                0.06883931159973145,
+                -0.0132139902561903
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 26,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.19734230637550354,
+                0.17466500401496887,
+                -0.013253560289740562
+              ],
+              [
+                -0.17436149716377258,
+                0.19764600694179535,
+                -0.0021035668905824423
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 27,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.17471499741077423,
+                0.1520376056432724,
+                -0.013253560289740562
+              ],
+              [
+                -0.1517339050769806,
+                0.17501859366893768,
+                -0.0021035668905824423
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 28,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.15113399922847748,
+                -0.17451860010623932,
+                -0.013253560289740562
+              ],
+              [
+                0.17411500215530396,
+                -0.15153749287128448,
+                -0.0021035668905824423
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 29,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.15148760378360748,
+                0.1516840010881424,
+                -0.013253560289740562
+              ],
+              [
+                0.17446860671043396,
+                0.17466500401496887,
+                -0.0021035668905824423
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 30,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.1737615019083023,
+                -0.19714589416980743,
+                -0.013253560289740562
+              ],
+              [
+                0.19674240052700043,
+                -0.17416499555110931,
+                -0.0021035668905824423
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 31,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.17411500215530396,
+                0.17431150376796722,
+                -0.013253560289740562
+              ],
+              [
+                0.19709600508213043,
+                0.19729240238666534,
+                -0.0021035668905824423
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 32,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.19734230637550354,
+                -0.19714589416980743,
+                -0.013189610093832016
+              ],
+              [
+                -0.17436149716377258,
+                -0.17416499555110931,
+                -0.002039611106738448
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 33,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.17471499741077423,
+                -0.17451860010623932,
+                -0.013189610093832016
+              ],
+              [
+                -0.1517339050769806,
+                -0.15153749287128448,
+                -0.002039611106738448
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 34,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.0688893124461174,
+                -0.06869286298751831,
+                -0.013149970211088657
+              ],
+              [
+                -0.04590839147567749,
+                -0.045711930841207504,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 35,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.0688893124461174,
+                0.04621189087629318,
+                -0.013149970211088657
+              ],
+              [
+                -0.04590839147567749,
+                0.06919287890195847,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 36,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.06252539157867432,
+                -0.06232893094420433,
+                -0.013149970211088657
+              ],
+              [
+                -0.039544399827718735,
+                -0.03934793919324875,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 37,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                -0.06252539157867432,
+                0.0398479700088501,
+                -0.013149970211088657
+              ],
+              [
+                -0.039544399827718735,
+                0.06282895058393478,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 38,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.03894441947340965,
+                -0.06232893094420433,
+                -0.013149970211088657
+              ],
+              [
+                0.06192535161972046,
+                -0.03934793919324875,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 39,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.039297930896282196,
+                0.03949439153075218,
+                -0.013149970211088657
+              ],
+              [
+                0.06227891892194748,
+                0.062475379556417465,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 40,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.04530835151672363,
+                -0.06869286298751831,
+                -0.013149970211088657
+              ],
+              [
+                0.06828933209180832,
+                -0.045711930841207504,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 41,
+            "triangles": 288,
+            "bounds_m": [
+              [
+                0.04566191881895065,
+                0.04585837945342064,
+                -0.013149970211088657
+              ],
+              [
+                0.06864290684461594,
+                0.06883931159973145,
+                -0.0019999740179628134
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "frame_rails_rubber": {
+        "source_geometry_id": "RailsRubber-mesh",
+        "source_triangles": 8320,
+        "exported_triangles": 8320,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                -0.14894999563694,
+                -0.04103146865963936,
+                -0.05072646960616112
+              ],
+              [
+                -0.13625000417232513,
+                -0.018968520686030388,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 1,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                -0.14894999563694,
+                0.018968520686030388,
+                -0.05072646960616112
+              ],
+              [
+                -0.13625000417232513,
+                0.04103146865963936,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 2,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                -0.11495000123977661,
+                -0.04103146865963936,
+                -0.05072646960616112
+              ],
+              [
+                -0.10225000232458115,
+                -0.018968520686030388,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 3,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                -0.11495000123977661,
+                0.018968520686030388,
+                -0.05072646960616112
+              ],
+              [
+                -0.10225000232458115,
+                0.04103146865963936,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 4,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                -0.05664997920393944,
+                -0.04103146865963936,
+                -0.05072646960616112
+              ],
+              [
+                -0.04394996166229248,
+                -0.018968520686030388,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 5,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                -0.05664997920393944,
+                0.018968520686030388,
+                -0.05072646960616112
+              ],
+              [
+                -0.04394996166229248,
+                0.04103146865963936,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 6,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                0.0433499813079834,
+                -0.04103146865963936,
+                -0.05072646960616112
+              ],
+              [
+                0.056049998849630356,
+                -0.018968520686030388,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 7,
+            "triangles": 1040,
+            "bounds_m": [
+              [
+                0.0433499813079834,
+                0.018968520686030388,
+                -0.05072646960616112
+              ],
+              [
+                0.056049998849630356,
+                0.04103146865963936,
+                -0.028501449152827263
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "frame_fmuk66": {
+        "source_geometry_id": "FMUK66-mesh",
+        "source_triangles": 47424,
+        "exported_triangles": 47424,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 47424,
+            "bounds_m": [
+              [
+                -0.05062209814786911,
+                -0.02595042996108532,
+                0.009269951842725277
+              ],
+              [
+                0.04303615912795067,
+                0.026049550622701645,
+                0.026359429582953453
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "frame_antenna_holder": {
+        "source_geometry_id": "RailsAntennaHolder-mesh",
+        "source_triangles": 6888,
+        "exported_triangles": 6888,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 6888,
+            "bounds_m": [
+              [
+                0.06929998844861984,
+                -0.05120360106229782,
+                -0.0590888187289238
+              ],
+              [
+                0.07729995250701904,
+                0.05123155936598778,
+                -0.03161400184035301
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      },
+      "frame_landing_plastic": {
+        "source_geometry_id": "LandingPlastic-mesh",
+        "source_triangles": 60436,
+        "exported_triangles": 0,
+        "excluded_landing_gear_triangles": 60436,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 15891,
+            "bounds_m": [
+              [
+                -0.020299969241023064,
+                -0.1462620049715042,
+                -0.2525995075702667
+              ],
+              [
+                0.01969999074935913,
+                -0.10832860320806503,
+                -0.20090900361537933
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingPlastic-mesh' is a Landing* component; piece reaches z=-0.2526 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 1,
+            "triangles": 15891,
+            "bounds_m": [
+              [
+                -0.020299969241023064,
+                0.1088285967707634,
+                -0.2525995075702667
+              ],
+              [
+                0.01969999074935913,
+                0.14676199853420258,
+                -0.20090900361537933
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingPlastic-mesh' is a Landing* component; piece reaches z=-0.2526 m < -0.1 m (native DAE frame)"
+          },
+          {
+            "piece": 2,
+            "triangles": 14327,
+            "bounds_m": [
+              [
+                -0.019549960270524025,
+                -0.07602143287658691,
+                -0.061999790370464325
+              ],
+              [
+                0.018949799239635468,
+                -0.0370136983692646,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingPlastic-mesh' is a Landing* component"
+          },
+          {
+            "piece": 3,
+            "triangles": 14327,
+            "bounds_m": [
+              [
+                -0.01954977959394455,
+                0.037513669580221176,
+                -0.061999790370464325
+              ],
+              [
+                0.018949979916214943,
+                0.0765213891863823,
+                -0.026363959535956383
+              ]
+            ],
+            "class": "landing_gear",
+            "reason": "COLLADA component 'LandingPlastic-mesh' is a Landing* component"
+          }
+        ]
+      },
+      "frame_fmu_rubber": {
+        "source_geometry_id": "FMURubber-mesh",
+        "source_triangles": 4136,
+        "exported_triangles": 4136,
+        "excluded_landing_gear_triangles": 0,
+        "pieces": [
+          {
+            "piece": 0,
+            "triangles": 1034,
+            "bounds_m": [
+              [
+                -0.03716539964079857,
+                0.023706849664449692,
+                -0.0034999840427190065
+              ],
+              [
+                -0.025151720270514488,
+                0.0361168310046196,
+                0.010769959539175034
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 1,
+            "triangles": 1034,
+            "bounds_m": [
+              [
+                -0.03713088855147362,
+                -0.03526711091399193,
+                -0.0034999840427190065
+              ],
+              [
+                -0.025120669975876808,
+                -0.022854140028357506,
+                0.010769959539175034
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 2,
+            "triangles": 1034,
+            "bounds_m": [
+              [
+                0.023204920813441277,
+                0.023770680651068687,
+                -0.0034999840427190065
+              ],
+              [
+                0.03521173819899559,
+                0.036186568439006805,
+                0.010769959539175034
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          },
+          {
+            "piece": 3,
+            "triangles": 1034,
+            "bounds_m": [
+              [
+                0.023236030712723732,
+                -0.03526711091399193,
+                -0.0034999840427190065
+              ],
+              [
+                0.03524630889296532,
+                -0.022854140028357506,
+                0.010769959539175034
+              ]
+            ],
+            "class": "upper_structure",
+            "reason": "above gear threshold, non-Landing component"
+          }
+        ]
+      }
+    },
+    "z_rule_margins_m": {
+      "lowest_upper_structure_piece_min_z": -0.07161395996809006,
+      "highest_z_rule_gear_piece_min_z": -0.20574240386486053,
+      "threshold": -0.1
+    }
+  },
+  "components": {
+    "motor_base_5010_stator": {
+      "source_file": "models/x500_base/meshes/5010Base.dae",
+      "source_file_sha256": "798396a1945c7ff55a0840b77869e27affdd35fed0d784fff96b68f50f160ea0",
+      "source_geometry_id": "Body1_001-mesh",
+      "source_node_path": "Stator_001/Stator",
+      "source_material": {
+        "material_id": "Material_003-material",
+        "effect_id": "Material_003-effect",
+        "diffuse": {
+          "rgba": [
+            0.25,
+            0.25,
+            0.25,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          0.009999999776482582,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          3.13915983074549e-09,
+          -0.009999999776482582,
+          0.0
+        ],
+        [
+          0.0,
+          0.009999999776482582,
+          3.13915983074549e-09,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": false,
+      "node_transform_det": 9.999999329448732e-07,
+      "normal_transform": "inverse-transpose of node 3x3, renormalized",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/motor_base_5010_stator.obj",
+      "output_obj_sha256": "f0a982fd1aad4307967883a53937df025d692e875bf095a9fc38100001714ce4",
+      "output_obj_bytes": 649442,
+      "counts": {
+        "source_triangles": 3776,
+        "exported_triangles": 3776,
+        "v": 2924,
+        "vt": 11328,
+        "vn": 2398,
+        "f": 3776
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.999564494172215e-09,
+        "uv": 0.0,
+        "normal_component": 4.998180702653343e-09,
+        "normal_unit_length_dev": 7.476001262496368e-09
+      },
+      "bbox_deviation_m": 4.142168425966264e-09,
+      "bounds_m": [
+        [
+          -0.01431094,
+          -0.01431094,
+          -0.007
+        ],
+        [
+          0.01431094,
+          0.01431094,
+          0.011
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    },
+    "motor_bell_5010_side": {
+      "source_file": "models/x500_base/meshes/5010Bell.dae",
+      "source_file_sha256": "b90a1b2dd63a8ebbe1f3339ed18cef23673e0d8f03314fd9b9533a68b6b66668",
+      "source_geometry_id": "Body1-mesh",
+      "source_node_path": "BellSide/Bellside",
+      "source_material": {
+        "material_id": "Material_002-material",
+        "effect_id": "Material_002-effect",
+        "diffuse": {
+          "rgba": [
+            0.03106355,
+            0.03106355,
+            0.03106355,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          0.009999999776482582,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          3.13915983074549e-09,
+          -0.009999999776482582,
+          0.0
+        ],
+        [
+          0.0,
+          0.009999999776482582,
+          3.13915983074549e-09,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": false,
+      "node_transform_det": 9.999999329448732e-07,
+      "normal_transform": "inverse-transpose of node 3x3, renormalized",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/motor_bell_5010_side.obj",
+      "output_obj_sha256": "895ee02309c9daa4d4510979fb817f07b91dced3254ca9f0f23f51aa76cb73b3",
+      "output_obj_bytes": 117754,
+      "counts": {
+        "source_triangles": 712,
+        "exported_triangles": 712,
+        "v": 720,
+        "vt": 2136,
+        "vn": 290,
+        "f": 712
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.985171653953957e-09,
+        "uv": 0.0,
+        "normal_component": 4.999138991657048e-09,
+        "normal_unit_length_dev": 5.9051195044901306e-09
+      },
+      "bbox_deviation_m": 3.859129123900962e-09,
+      "bounds_m": [
+        [
+          -0.0295,
+          -0.0295,
+          -1e-08
+        ],
+        [
+          0.0295,
+          0.0295,
+          0.01300001
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    },
+    "motor_bell_5010_head": {
+      "source_file": "models/x500_base/meshes/5010Bell.dae",
+      "source_file_sha256": "b90a1b2dd63a8ebbe1f3339ed18cef23673e0d8f03314fd9b9533a68b6b66668",
+      "source_geometry_id": "Body2-mesh",
+      "source_node_path": "BellHead/BellHead_001",
+      "source_material": {
+        "material_id": "Material_001-material",
+        "effect_id": "Material_001-effect",
+        "diffuse": {
+          "rgba": [
+            0.25,
+            0.25,
+            0.25,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          0.009999999776482582,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          3.13915983074549e-09,
+          -0.009999999776482582,
+          0.0
+        ],
+        [
+          0.0,
+          0.009999999776482582,
+          3.13915983074549e-09,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": false,
+      "node_transform_det": 9.999999329448732e-07,
+      "normal_transform": "inverse-transpose of node 3x3, renormalized",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/motor_bell_5010_head.obj",
+      "output_obj_sha256": "56c5f926be056d310e8420e3f1b5c5b26b000da0a6366caaba16b64afad99cf1",
+      "output_obj_bytes": 580761,
+      "counts": {
+        "source_triangles": 3206,
+        "exported_triangles": 3206,
+        "v": 3073,
+        "vt": 9618,
+        "vn": 2388,
+        "f": 3206
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.999684683620886e-09,
+        "uv": 0.0,
+        "normal_component": 4.9996332629476115e-09,
+        "normal_unit_length_dev": 7.773075072492475e-09
+      },
+      "bbox_deviation_m": 4.321181978211852e-09,
+      "bounds_m": [
+        [
+          -0.0295,
+          -0.0295,
+          0.01299999
+        ],
+        [
+          0.0295,
+          0.0295,
+          0.021
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    },
+    "frame_carbon_fiber_upper": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_file_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+      "source_geometry_id": "CarbonFiber-mesh",
+      "source_node_path": "CarbonFiber",
+      "source_material": {
+        "material_id": "CarbonFiber-material",
+        "effect_id": "CarbonFiber-effect",
+        "diffuse": {
+          "texture": "CF.png",
+          "texcoord": "UVMap"
+        }
+      },
+      "node_transform_baked": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": true,
+      "node_transform_det": 1.0,
+      "normal_transform": "as-is (identity node transform)",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/frame_carbon_fiber_upper.obj",
+      "output_obj_sha256": "83766c05ccf6d8c20cc936ae5f21e0e15ac2324c64b3a467abb380604fe12f7f",
+      "output_obj_bytes": 4314929,
+      "counts": {
+        "source_triangles": 28332,
+        "exported_triangles": 26956,
+        "v": 13130,
+        "vt": 80868,
+        "vn": 13917,
+        "f": 26956
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.99925553796958e-09,
+        "uv": 4.999237024350123e-09,
+        "normal_component": 4.9999839038353966e-09,
+        "normal_unit_length_dev": 1.9870788592335487e-07
+      },
+      "bbox_deviation_m": 4.840660094984628e-09,
+      "bounds_m": [
+        [
+          -0.1979682,
+          -0.1977717,
+          -0.07161396
+        ],
+        [
+          0.1977217,
+          0.19827171,
+          0.00926995
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0,
+        "trimesh_resolved_texture_image": true,
+        "texture_pixels_identical_to_bundle_file": true
+      }
+    },
+    "frame_metal": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_file_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+      "source_geometry_id": "Metal-mesh",
+      "source_node_path": "Metal",
+      "source_material": {
+        "material_id": "Metal-material",
+        "effect_id": "Metal-effect",
+        "diffuse": {
+          "rgba": [
+            0.3185468,
+            0.3185468,
+            0.3185468,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": true,
+      "node_transform_det": 1.0,
+      "normal_transform": "as-is (identity node transform)",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/frame_metal.obj",
+      "output_obj_sha256": "24c28ec13e5aa862488f1c276a4adb6f95dc9f596188adf656641c63ac92163a",
+      "output_obj_bytes": 2333616,
+      "counts": {
+        "source_triangles": 14328,
+        "exported_triangles": 14328,
+        "v": 7096,
+        "vt": 42984,
+        "vn": 8292,
+        "f": 14328
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.999542224659592e-09,
+        "uv": 0.0,
+        "normal_component": 4.999947532778507e-09,
+        "normal_unit_length_dev": 1.9257521821636203e-07
+      },
+      "bbox_deviation_m": 4.917869556031462e-09,
+      "bounds_m": [
+        [
+          -0.19734231,
+          -0.19714589,
+          -0.06961399
+        ],
+        [
+          0.19709601,
+          0.19764601,
+          -0.00199997
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    },
+    "frame_rails_rubber": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_file_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+      "source_geometry_id": "RailsRubber-mesh",
+      "source_node_path": "RailsRubber",
+      "source_material": {
+        "material_id": "RailsRubber-material",
+        "effect_id": "RailsRubber-effect",
+        "diffuse": {
+          "rgba": [
+            0.1004815,
+            0.1004815,
+            0.1004815,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": true,
+      "node_transform_det": 1.0,
+      "normal_transform": "as-is (identity node transform)",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/frame_rails_rubber.obj",
+      "output_obj_sha256": "a000d7263be0d8f76ce643683882eb67e26bd53629780b4f58da6f1b885d665f",
+      "output_obj_bytes": 1383390,
+      "counts": {
+        "source_triangles": 8320,
+        "exported_triangles": 8320,
+        "v": 4160,
+        "vt": 24960,
+        "vn": 5718,
+        "f": 8320
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.874382009134592e-09,
+        "uv": 0.0,
+        "normal_component": 4.997711133825078e-09,
+        "normal_unit_length_dev": 2.0448954729523905e-07
+      },
+      "bbox_deviation_m": 4.363059996626006e-09,
+      "bounds_m": [
+        [
+          -0.14895,
+          -0.04103147,
+          -0.05072647
+        ],
+        [
+          0.05605,
+          0.04103147,
+          -0.02850145
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    },
+    "frame_fmuk66": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_file_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+      "source_geometry_id": "FMUK66-mesh",
+      "source_node_path": "FMUK66",
+      "source_material": {
+        "material_id": "FMUK66-material",
+        "effect_id": "FMUK66-effect",
+        "diffuse": {
+          "rgba": [
+            0.9960784,
+            0.9960784,
+            0.9960784,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": true,
+      "node_transform_det": 1.0,
+      "normal_transform": "as-is (identity node transform)",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/frame_fmuk66.obj",
+      "output_obj_sha256": "314c7148e155e836c51240e5f91169beeb60e3b73265463e44aa254d7d862075",
+      "output_obj_bytes": 8188906,
+      "counts": {
+        "source_triangles": 47424,
+        "exported_triangles": 47424,
+        "v": 23440,
+        "vt": 142272,
+        "vn": 32855,
+        "f": 47424
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.9978965521290525e-09,
+        "uv": 4.999999969612645e-09,
+        "normal_component": 4.999999999970306e-09,
+        "normal_unit_length_dev": 2.1403445904510932e-07
+      },
+      "bbox_deviation_m": 1.852130893098547e-09,
+      "bounds_m": [
+        [
+          -0.0506221,
+          -0.02595043,
+          0.00926995
+        ],
+        [
+          0.04303616,
+          0.02604955,
+          0.02635943
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 7.838010787963867e-05
+      }
+    },
+    "frame_antenna_holder": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_file_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+      "source_geometry_id": "RailsAntennaHolder-mesh",
+      "source_node_path": "RailsAntennaHolder",
+      "source_material": {
+        "material_id": "RailsAntennaHolder-material",
+        "effect_id": "RailsAntennaHolder-effect",
+        "diffuse": {
+          "rgba": [
+            0.9568627,
+            0.9568627,
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": true,
+      "node_transform_det": 1.0,
+      "normal_transform": "as-is (identity node transform)",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/frame_antenna_holder.obj",
+      "output_obj_sha256": "e1c236544276adb6f95bc7145c84a4eaf0510fc47eb2095753a13d2657dc2526",
+      "output_obj_bytes": 1218805,
+      "counts": {
+        "source_triangles": 6888,
+        "exported_triangles": 6888,
+        "v": 3442,
+        "vt": 20664,
+        "vn": 6709,
+        "f": 6888
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 3.7246894873943504e-09,
+        "uv": 0.0,
+        "normal_component": 4.999999969612645e-09,
+        "normal_unit_length_dev": 2.0735954775474852e-07
+      },
+      "bbox_deviation_m": 2.5070190368126077e-09,
+      "bounds_m": [
+        [
+          0.06929999,
+          -0.0512036,
+          -0.05908882
+        ],
+        [
+          0.07729995,
+          0.05123156,
+          -0.031614
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    },
+    "frame_fmu_rubber": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_file_sha256": "7321861b113866996dfa79b403def5666d4b796810840d2c057c7b51fc315b0a",
+      "source_geometry_id": "FMURubber-mesh",
+      "source_node_path": "FMURubber",
+      "source_material": {
+        "material_id": "FMURubber-material",
+        "effect_id": "FMURubber-effect",
+        "diffuse": {
+          "rgba": [
+            0.1882353,
+            0.2313726,
+            0.5882354,
+            1.0
+          ]
+        }
+      },
+      "node_transform_baked": [
+        [
+          1.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          1.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "node_transform_identity": true,
+      "node_transform_det": 1.0,
+      "normal_transform": "as-is (identity node transform)",
+      "normals_exported": true,
+      "normals_omitted_reason": null,
+      "output_obj": "meshes/frame_fmu_rubber.obj",
+      "output_obj_sha256": "50f25f5c81b81dc5ad536eb8f945961b7341c90ca9d530f6d2dde47de29fbec1",
+      "output_obj_bytes": 690914,
+      "counts": {
+        "source_triangles": 4136,
+        "exported_triangles": 4136,
+        "v": 2076,
+        "vt": 12408,
+        "vn": 3267,
+        "f": 4136
+      },
+      "max_deviation_obj_vs_source": {
+        "position_m": 4.996333718282342e-09,
+        "uv": 0.0,
+        "normal_component": 4.999810457144427e-09,
+        "normal_unit_length_dev": 2.1806605388086098e-07
+      },
+      "bbox_deviation_m": 4.042719006346757e-09,
+      "bounds_m": [
+        [
+          -0.0371654,
+          -0.03526711,
+          -0.00349998
+        ],
+        [
+          0.03524631,
+          0.03618657,
+          0.01076996
+        ]
+      ],
+      "trimesh_cross_check": {
+        "trimesh_transform_matches_collada": true,
+        "max_abs_pos_vs_trimesh_m": 0.0,
+        "max_abs_uv_vs_trimesh": 0.0
+      }
+    }
+  },
+  "excluded_components": {
+    "frame_landing_foam": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_geometry_id": "LandingFoam-mesh",
+      "source_triangles": 4992,
+      "reason": "entire component is x500 landing gear (represented by physical contact geoms)",
+      "source_material": {
+        "material_id": "LandingFoam-material",
+        "effect_id": "LandingFoam-effect",
+        "diffuse": {
+          "rgba": [
+            0.7019608,
+            0.7019608,
+            0.7019608,
+            1.0
+          ]
+        }
+      }
+    },
+    "frame_landing_rubber": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_geometry_id": "LandingRubber-mesh",
+      "source_triangles": 4144,
+      "reason": "entire component is x500 landing gear (represented by physical contact geoms)",
+      "source_material": {
+        "material_id": "LandingRubber-material",
+        "effect_id": "LandingRubber-effect",
+        "diffuse": {
+          "rgba": [
+            0.003921569,
+            0.003921569,
+            0.003921569,
+            1.0
+          ]
+        }
+      }
+    },
+    "frame_landing_plastic": {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_geometry_id": "LandingPlastic-mesh",
+      "source_triangles": 60436,
+      "reason": "entire component is x500 landing gear (represented by physical contact geoms)",
+      "source_material": {
+        "material_id": "LandingPlastic-material",
+        "effect_id": "LandingPlastic-effect",
+        "diffuse": {
+          "rgba": [
+            0.5225216,
+            0.5225216,
+            0.5225216,
+            1.0
+          ]
+        }
+      }
+    }
+  },
+  "stl_copies": {
+    "prop_1345_ccw": {
+      "source_file": "models/x500_base/meshes/1345_prop_ccw.stl",
+      "source_sha256": "ba197e0961117a3462b555d65edf3433ba8ff5691624100a185242cb5f456244",
+      "output": "meshes/prop_1345_ccw.stl",
+      "output_sha256": "ba197e0961117a3462b555d65edf3433ba8ff5691624100a185242cb5f456244",
+      "byte_identical": true,
+      "geometry_conversion": "none (byte copy)",
+      "format": "binary STL (80-byte header begins with 'solid')",
+      "triangles": 10454,
+      "bounds_native_units": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.05203067883849144,
+          0.34599989652633667,
+          0.029999999329447746
+        ]
+      ],
+      "sdf_material_script": "Gazebo/DarkGrey",
+      "material_rgba": [
+        0.175,
+        0.175,
+        0.175,
+        1.0
+      ],
+      "material_provenance": "ASSUMED: value of Gazebo-classic 'Gazebo/DarkGrey' diffuse as defined in upstream gazebo.material; that OGRE script is not part of PX4-gazebo-models and was not verified against a local copy. Visual-only."
+    },
+    "prop_1345_cw": {
+      "source_file": "models/x500_base/meshes/1345_prop_cw.stl",
+      "source_sha256": "7aa4b61c1ddc5304c9c1f5602eacf5e2ec5eafb95dd1f2a3368342f256122fc0",
+      "output": "meshes/prop_1345_cw.stl",
+      "output_sha256": "7aa4b61c1ddc5304c9c1f5602eacf5e2ec5eafb95dd1f2a3368342f256122fc0",
+      "byte_identical": true,
+      "geometry_conversion": "none (byte copy)",
+      "format": "binary STL (80-byte header begins with 'solid')",
+      "triangles": 10436,
+      "bounds_native_units": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.05203067883849144,
+          0.34599989652633667,
+          0.029999999329447746
+        ]
+      ],
+      "sdf_material_script": "Gazebo/DarkGrey",
+      "material_rgba": [
+        0.175,
+        0.175,
+        0.175,
+        1.0
+      ],
+      "material_provenance": "ASSUMED: value of Gazebo-classic 'Gazebo/DarkGrey' diffuse as defined in upstream gazebo.material; that OGRE script is not part of PX4-gazebo-models and was not verified against a local copy. Visual-only."
+    }
+  },
+  "textures": {
+    "cf.png": {
+      "source": "models/x500_base/meshes/CF.png",
+      "source_sha256": "3a56ec48eeaaf7774e8d3e8e5e88f6973bfa5652c610974c3eb2dbec6ec85944",
+      "output": "textures/cf.png",
+      "output_sha256": "3a56ec48eeaaf7774e8d3e8e5e88f6973bfa5652c610974c3eb2dbec6ec85944",
+      "byte_identical": true,
+      "note": "models/x500_base/materials/textures/CF.png is a byte-identical duplicate (not used by any mesh)"
+    }
+  },
+  "known_conversion_tolerances": [
+    {
+      "component": "frame_fmuk66",
+      "source_geometry": "FMUK66-mesh",
+      "kind": "trimesh cross-check UV discrepancy on an UNTEXTURED component",
+      "max_abs_uv": 7.838010787963867e-05,
+      "approx_pixels_on_1024px_map": 0.08026123046875,
+      "affects_exported_obj": false,
+      "note": "exported OBJ UVs come from pycollada index streams and meet the UV gate; no visual effect (untextured)"
+    }
+  ],
+  "dropped_source_primitives": [
+    {
+      "source_file": "models/x500_base/meshes/NXP-HGD-CF.dae",
+      "source_component": "FMUK66-mesh",
+      "output_component": "frame_fmuk66",
+      "dropped_primitives": "48 line segments",
+      "detail": {
+        "type": "LineSet",
+        "segments": 48,
+        "segment_length_m_min_max": [
+          0.0,
+          0.0006481080199591815
+        ],
+        "bounds_m": [
+          [
+            0.03452794998884201,
+            -0.02121596969664097,
+            0.018071940168738365
+          ],
+          [
+            0.039618369191884995,
+            0.021315090358257294,
+            0.018071940168738365
+          ]
+        ],
+        "material": null
+      },
+      "size": "approximately 0.00-0.65 mm",
+      "reason": "unsupported/non-triangular internal CAD edges (COLLADA LineSet)",
+      "expected_visual_impact": "none",
+      "physics_impact": "none",
+      "handling": "dropped; no replacement geometry synthesized"
+    }
+  ],
+  "gates_passed": true,
+  "dae_source_union_bounds_m": {
+    "5010Base.dae": [
+      [
+        -0.01431094018419965,
+        -0.014310942327383894,
+        -0.007000004142168426
+      ],
+      [
+        0.01431094018419965,
+        0.014310939031265941,
+        0.011000003601851924
+      ]
+    ],
+    "5010Bell.dae": [
+      [
+        -0.029499999817460765,
+        -0.029499999778221517,
+        -9.221282002814877e-09
+      ],
+      [
+        0.029499999817460765,
+        0.029500004321181977,
+        0.02100000159838039
+      ]
+    ],
+    "NXP-HGD-CF.dae": [
+      [
+        -0.19796819984912872,
+        -0.19777169823646545,
+        -0.2525995075702667
+      ],
+      [
+        0.1977217048406601,
+        0.198271706700325,
+        0.026359429582953453
+      ]
+    ]
+  },
+  "dae_exported_union_bounds_m": {
+    "5010Base.dae": [
+      [
+        -0.01431094,
+        -0.01431094,
+        -0.007
+      ],
+      [
+        0.01431094,
+        0.01431094,
+        0.011
+      ]
+    ],
+    "5010Bell.dae": [
+      [
+        -0.0295,
+        -0.0295,
+        -1e-08
+      ],
+      [
+        0.0295,
+        0.0295,
+        0.021
+      ]
+    ],
+    "NXP-HGD-CF.dae": [
+      [
+        -0.1979682,
+        -0.1977717,
+        -0.07161396
+      ],
+      [
+        0.1977217,
+        0.19827171,
+        0.02635943
+      ]
+    ]
+  },
+  "native_assembly_manifest": {
+    "file": "x500_native_assembly.json",
+    "sha256": "93960493d554faa541024d96d9bdf86a16ac7c09e5a159a4b8196bbaeb4abe1a",
+    "visual_instances": 13,
+    "not_integrated_visuals": [
+      {
+        "visual": "NXP_FMUK66_FRONT",
+        "link": "base_link",
+        "reason": "decorative textured <plane> decal (0.013 x 0.007 m, nxp.png PBR albedo); not a mesh"
+      },
+      {
+        "visual": "NXP_FMUK66_TOP",
+        "link": "base_link",
+        "reason": "decorative textured <plane> decal (0.013 x 0.007 m, nxp.png PBR albedo); not a mesh"
+      },
+      {
+        "visual": "RDDRONE_FMUK66_TOP",
+        "link": "base_link",
+        "reason": "decorative textured <plane> decal (0.032 x 0.0034 m, rd.png PBR albedo); not a mesh"
+      }
+    ]
+  },
+  "license_copy": {
+    "source": "models/x500_base/LICENSE",
+    "source_sha256": "cee4ef94e73cd38fb2886f5d7e7a04d6488f54b1e70cd8b1b29d74f38bfdba5b",
+    "file": "LICENSE",
+    "sha256": "cee4ef94e73cd38fb2886f5d7e7a04d6488f54b1e70cd8b1b29d74f38bfdba5b",
+    "byte_identical_to_source": true
+  },
+  "gate_failures": []
+}

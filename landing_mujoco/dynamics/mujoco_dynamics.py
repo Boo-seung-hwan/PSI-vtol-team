@@ -50,6 +50,7 @@ from landing_mujoco.coordinates.transforms import (
 from landing_mujoco.dynamics.actuation_model import IdentifiedWrenchActuation
 from landing_mujoco.dynamics.contact import begin_step, classify_touchdown
 from landing_mujoco.dynamics.mjcf_builder import build_mjcf
+from landing_mujoco.visualization.x500_shell import build_x500_visual_shell
 from landing_rl.contact.contact_model import ContactResult, ContactState
 from landing_rl.dynamics.inner_loop_command_model import InnerLoopCommandModel
 from landing_rl.dynamics.process_noise import ProcessNoiseSampler
@@ -63,11 +64,14 @@ class MuJoCoDynamics:
     ``step`` signature, called directly by ``MujocoLandingEnv``.
     """
 
-    def __init__(self, params: UAVPhysicalParams, control_cfg, sim_cfg: SimulationConfig):
+    def __init__(self, params: UAVPhysicalParams, control_cfg, sim_cfg: SimulationConfig, visualization=None):
         self.params = params
         self.cfg = control_cfg
         self.sim_cfg = sim_cfg
         self.mass_kg = float(params.mass_properties.mass_kg)
+        # Visualization-only (see landing_mujoco/visualization/x500_shell.py).
+        # None / disabled -> the MJCF is exactly the physics-only model.
+        self.visual_shell = build_x500_visual_shell(visualization, params)
         # Ground effect is a physical-clearance phenomenon: it must trigger
         # based on the landing gear's actual height above the ground, not
         # the CG's raw NED z (see MUJOCO_MODEL.md's landing-gear-standoff
@@ -80,6 +84,7 @@ class MuJoCoDynamics:
             params,
             physics_dt=sim_cfg.physics_dt,
             ground_friction_xy=control_cfg.ground_friction_xy,
+            visual_shell=self.visual_shell,
         )
         self.xml = xml
         self.model = mujoco.MjModel.from_xml_string(xml)

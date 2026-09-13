@@ -1,12 +1,14 @@
 # UGRP Precision-Landing Project Handover
 
-Last updated: 2026-09-13 (canonical-environment entry-point migration +
-VehicleDynamicsBackend interface seam + InnerLoopCommandModel control/physics
-split + new additive `landing_mujoco/` provisional-parameter MuJoCo pipeline;
-see §0.3, §0.4, §0.9/§0.10, and the four 2026-09-13 §9 entries)
+Last updated: 2026-09-14 (x500 visual shell, visualization only, split-shell
+landing gear, pinned PX4-gazebo-models provenance, vendor copy removed;
+committed as "Add x500 visual shell to MuJoCo landing environment" on top of
+`7b231ef` — see the 2026-09-14 §9 entries and the SESSION CLOSEOUT entry. Earlier: 2026-09-13 entry-point migration +
+VehicleDynamicsBackend seam + provisional `landing_mujoco/` MuJoCo pipeline)
 Repository: `/home/qntmdghkss/drone_stack_rl_refactor` (a Git worktree of the UGRP drone_stack repository; per CLAUDE.md §5 this path is not guaranteed stable across sessions/machines — always re-verify with `git rev-parse --show-toplevel`)
 Branch: `refactor/landing-rl-architecture`
-HEAD: `9a154dffefee59c50df1c7052178e714b8346097` ("Add ULog preprocessing pipeline for system identification"). The entry-point migration, backend-interface work, InnerLoopCommandModel split, and new `landing_mujoco/` package described in §0.3/§0.4 and the four 2026-09-13 §9 entries are IN THE WORKING TREE, NOT COMMITTED — `git status --short` shows 13 modified files (7 `mujoco_rl/*.py` scripts + `landing_rl/dynamics/{__init__,plant_model,legacy_dynamics}.py` + `landing_rl/tests/{test_legacy_dynamics,test_structural_freeze}.py`), 5 untracked new files under `landing_rl/` (`dynamics/{vehicle_dynamics_backend,inner_loop_command_model}.py`, `tests/{test_entry_point_migration,test_vehicle_dynamics_backend,test_inner_loop_command_model}.py`), and a new, entirely separate, untracked `landing_mujoco/` package (~20 files) plus `MUJOCO_MODEL.md` — the `landing_mujoco/` work touches nothing under `landing_rl/` or `mujoco_rl/`.
+HEAD: the commit containing this revision of the file — "Add x500 visual shell to MuJoCo landing environment", parent `7b231ef082c5124b0140639b79e5f518599f6f06` ("Add provisional MuJoCo landing simulation pipeline"); resolve its hash with `git log -1 --format=%H -- PROJECT_HANDOVER.md`. The 2026-09-13 work is committed as `53e1ce6` (entry-point migration), `e3b408f` (VehicleDynamicsBackend seam), `7b231ef` (provisional MuJoCo pipeline). The 2026-09-14 x500 visual shell is committed in the visualization commit (all under `landing_mujoco/` plus `MUJOCO_MODEL.md` and this file; nothing under `landing_rl/` or `mujoco_rl/`). Not pushed.
+[HISTORICAL — superseded by the line above] Before the 2026-09-13 commits, HEAD was `9a154df` and all 2026-09-13 work was uncommitted.
 
 This document is created for the first time in this session. No prior
 `PROJECT_HANDOVER.md` existed in this repository before this entry (verified:
@@ -317,6 +319,17 @@ above).
   `z_error` by construction. See §9 and `MUJOCO_MODEL.md`.
 
 ## 0.10 Immediate next step
+
+`[CURRENT — 2026-09-14 session closeout, user-specified]` The next session
+starts with **real UGRP vehicle parameter measurement / injection** into
+`landing_mujoco/configs/ugrp_vehicle_measured.yaml` — NOT further
+visualization work, and NOT PPO training. Recommended order: mass → CG →
+inertia → motor positions → landing-gear geometry → max collective thrust →
+roll/pitch/thrust response identification → actuator delay → real-flight vs
+MuJoCo validation. See the final 2026-09-14 §9 closeout entry.
+
+`[HISTORICAL — superseded by the item above]` The text below predates the
+2026-09-14 closeout.
 
 [OPEN] — no user-approved "next step" decision is recorded. The 2026-09-07
 phase implemented `system_id/preprocessing/`; the 2026-09-13 session
@@ -1508,3 +1521,270 @@ working tree dirty — this entry modifies only files already inside
 edit); zero changes under `landing_rl/`, `mujoco_rl/`, or any other
 existing path (re-verified: `git status --short` outside `landing_mujoco/`
 and the two `.md` files is identical to before this entry).
+
+`[CORRECTION 2026-09-14]` The GIT STATE lines of the 2026-09-13 entries
+above were written before the three commits were created. The A/B/C work
+was subsequently committed as `53e1ce6` (entry-point migration), `e3b408f`
+(VehicleDynamicsBackend seam) and `7b231ef` (provisional MuJoCo pipeline,
+including this handover update); HEAD at the start of 2026-09-14 was
+`7b231ef` with a clean tree apart from the new untracked vendor copy.
+
+---
+
+### 2026-09-14 — x500 visual shell (visualization only), UNCOMMITTED
+
+`[FACT]` Per explicit user instruction, integrated the PX4/Gazebo x500
+airframe appearance into the MuJoCo plant as a purely cosmetic visual shell.
+User-approved decisions this session (recorded as `[DECISION]`): use a
+uniformly rescaled visual assembly (`uniform_scale: auto` =
+target/source wheelbase, currently 0.737 / 0.49214631970583705 =
+1.4975221199266826), configurable in YAML; conversion tooling
+(`trimesh`, `pycollada`, `Pillow`) only in a disposable venv, never a
+runtime dependency; preserve 9 frame components separately with source
+materials and the CF.png texture; preserve source-authored normals; 8-decimal
+OBJ text precision; drop the 48 FMUK66 COLLADA line primitives; accept the
+sub-texel trimesh UV discrepancy on untextured components; do not convert
+OakD-Lite; keep native reconstruction and UGRP display scaling as separate
+layers.
+
+IMPLEMENTATION (all under `landing_mujoco/`, plus docs):
+  * `vendor/px4_gz_x500/` — user-supplied immutable upstream copy (x500,
+    x500_base, x500_depth, OakD-Lite); read only, not modified.
+  * `tools/convert_x500_visual_assets.py` — reproducible converter
+    (conversion env: Python 3.10.12, trimesh 5.1.0, pycollada 0.9.3,
+    Pillow 12.3.0). Writes OBJ directly from pycollada index streams
+    (per-corner v/vt/vn), bakes COLLADA node transforms (normals via
+    inverse-transpose + renormalization when non-identity, e.g. the 5010
+    parts' Y-up→Z-up rotation × 0.01 scale), enforces hard gates (position,
+    bbox, UV, normal ≤ 1e-7; triangle counts equal; textured UV and texture
+    pixels vs trimesh), and records everything in `conversion_report.json`.
+  * `assets/x500_visual/` — 12 OBJ components (9 frame, 1 motor base, 2 motor
+    bell), 2 byte-copied prop STLs, byte-copied `textures/cf.png`,
+    `x500_native_assembly.json` (SDF visual poses/scales transcribed
+    programmatically, no physics keys), `LICENSE` (verbatim BSD-3-Clause),
+    `THIRD_PARTY_NOTICES.md`, `README.md`, `conversion_report.json`
+    (gates_passed: true). Re-running the converter reproduces identical
+    output hashes.
+  * `configs/visualization_config.py`, `configs/x500_visualization.yaml` —
+    visualization-only config, separate from `UAVPhysicalParams`.
+  * `visualization/x500_shell.py` — native assembly + UGRP alignment,
+    emitted as nested compile-time `<frame>` elements (no bodies added);
+    shell geoms `contype=0 conaffinity=0 group=2`.
+  * `coordinates/transforms.py` — additive helpers only
+    (`SDF_MODEL_FLU_TO_MUJOCO_BODY`, `sdf_pose_matrix`,
+    `frd_body_offset_to_mujoco_body`, `rotation_matrix_to_mujoco_quaternion`).
+  * `dynamics/mjcf_builder.py`, `dynamics/mujoco_dynamics.py`,
+    `envs/mujoco_landing_env.py` — optional `visual_shell` / `visualization`
+    argument, default `None`.
+  * `tools/view_x500_visual.py` — interactive viewer / offscreen renders.
+
+VALIDATION:
+  * Visual-OFF MJCF sha256 `e2c5cb7a…` is byte-identical to the MJCF recorded
+    immediately before integration (pinned in `test_x500_visual_shell.py`).
+  * MuJoCo reconstruction of every component vs its OBJ, per face corner:
+    positions ≤ 1e-7 m, UV ≤ 1e-6 (MuJoCo's internal OBJ V-flip verified
+    against a ground-truth quadrant texture), authored normals ≤ 1e-6;
+    NXP-HGD-CF union bbox matches the approved acceptance reference.
+  * Native (scale 1) placement matches the SDF: motor bases at
+    (±0.174, ±0.174, 0.032) yaw −0.45, frame z +0.025 yaw π, prop hubs on the
+    rotor axes, bells at rotor link −0.032 m. Display layer satisfies
+    p_display = t + R (s·p_native) for every visual vertex. Scaled wheelbase
+    = 0.737000000000 m.
+  * Physics invariance (`test_visual_physics_invariance.py`): exact equality
+    of body mass/inertia/ipos/iquat, DoF/joint/actuator structure, options,
+    and all physics geoms; ON vs OFF trajectories for free fall, hover, known
+    body torque, landing/contact, deterministic and seeded stochastic env
+    episodes pass `rtol=0, atol=1e-12` and are in fact bit-identical.
+  * `python3 -m unittest discover -s landing_mujoco/tests -p "test_*.py"` →
+    82 passed, 0 failed (48 prior + 34 new).
+    `python3 -m unittest discover -s landing_rl/tests -p "test_*.py"` →
+    218 passed, 0 failed (171.6 s), unchanged baseline.
+  * Offscreen renders (OSMesa) of native and scaled shells match the vendor
+    Gazebo thumbnail; interactive GLFW viewer could not be exercised in this
+    headless session (`gladLoadGL error`).
+
+`[CAUTION]` Prop RGBA `0.175 0.175 0.175 1` is an ASSUMPTION for the SDF's
+`Gazebo/DarkGrey` script material (script file not in the vendor tree, not
+verified locally). Three decorative SDF plane decals are not integrated.
+
+`[OPEN]` Visual-only alignment conflict: with the default zero translation
+the visual rotor hubs match the physical motor positions horizontally
+(≤ 4.4e-5 m), but the scaled x500 landing gear bottom is at body z = −0.341 m
+versus the physical contact bottom at −0.140 m, so at physical rest the
+visual skids render ≈ 0.20 m below the ground plane. Options: set
+`translation_body_m` FRD z ≈ −0.2008 (skids on ground, visual rotor plane
+≈ 0.29 m above the physical motor plane), keep the default, or wait for
+measured gear geometry. Not decided.
+
+`[OPEN]` Observation only (no physics effect today): the x500 visual prop
+handedness follows PX4 quad-X (front-right CCW), which is opposite to the
+provisional `tarot680b_reference.yaml` spin assumption (M1 front-right CW).
+Spin direction is not consumed by the v0 dynamics; confirm against the real
+vehicle next week.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD `7b231ef`,
+uncommitted: new `landing_mujoco/{vendor,assets,tools,visualization}/`,
+new visualization config/tests, additive edits to `transforms.py`,
+`mjcf_builder.py`, `mujoco_dynamics.py`, `mujoco_landing_env.py`,
+`MUJOCO_MODEL.md`, and this file. No changes under `landing_rl/` or
+`mujoco_rl/`.
+
+---
+
+### 2026-09-14 (continued) — pinned upstream provenance, split-shell landing gear, vendor copy removed, UNCOMMITTED
+
+`[FACT]` Upstream provenance, verified this session with read-only git
+commands against the local PX4 checkout (not just transcribed):
+`/home/qntmdghkss/drone_stack/px4/PX4-Autopilot` HEAD
+`85df8c2281c2466b30a121b22b0bf33dc69bcfe4` records gitlink
+`Tools/simulation/gz` → `d754381a1cecdd7f17050acd72bf5bf1327bced6`, origin
+`https://github.com/PX4/PX4-gazebo-models.git`; `git status` / `git diff`
+for `models/{x500_base,x500,x500_depth,OakD-Lite}` are empty (the submodule
+is dirty only in unrelated `models/mono_cam`, `models/standard_vtol`,
+`worlds/psi_vtol_world.sdf`). All 42 files of the former
+`landing_mujoco/vendor/px4_gz_x500/` copy were byte-identical to the git
+blobs at `d754381a…`, and the file sets matched exactly.
+
+`[DECISION]` (user-selected via explicit choice, 2026-09-14): **split
+shell** — the x500 visual shell contains only the upper structure (frame
+plates/arms, metal, FMU, rails, antenna holder, motors, props); the x500
+landing gear is excluded and the landing gear shown in the viewer is the
+PHYSICAL contact geometry. Supersedes the earlier same-day `[OPEN]`
+alignment item (skids rendering ≈0.20 m below ground). Translation/rotation
+stay at the approved defaults `[0,0,0]`; scale stays auto (1.4975221199266826).
+
+`[DECISION]` (user): do not commit the duplicated vendor copy, provided the
+derived bundle is complete, hash-recorded, reproducible from an external
+PX4-gazebo-models tree at the pinned commit, and runtime does not depend on
+`vendor/`. All four conditions were verified (below) and the untracked copy
+was then removed.
+
+IMPLEMENTATION:
+  * `tools/convert_x500_visual_assets.py` v1.1.0: required `--source`
+    (PX4-gazebo-models root or `models/`); every input verified against a
+    pinned sha256 of the git blob at `d754381a…` (abort on mismatch; a one-byte
+    tamper test aborted with exit 2 and wrote nothing); git HEAD / origin /
+    path cleanliness recorded when the source is itself the checkout (a bug
+    that recorded an *enclosing* repository's git state for nested copies was
+    found and fixed this session); report/manifest paths are upstream-relative
+    (`models/x500_base/...`), no local or vendor path in the runtime
+    manifest; tool-owned `meshes/` and `textures/` are cleared on regeneration.
+  * Landing-gear partition: whole shared-vertex-connected pieces classified as
+    gear if the COLLADA component is `Landing*` or the piece reaches below
+    −0.10 m (native DAE frame). Result: `frame_landing_{foam,rubber,plastic}`
+    excluded entirely; carbon fiber 28,332 → 26,956 triangles (4 pieces: 2 leg
+    tubes, 2 skid tubes, 1,376 triangles). Margins: lowest upper piece −0.0716 m,
+    highest z-rule gear piece −0.2057 m. No triangle modified. Recorded per
+    piece in `conversion_report.json` → `landing_gear_partition`.
+  * `dynamics/mjcf_builder.py`: with a shell, the collision-inert placeholder
+    markers (`body_box`, `arm_*`, `motor_*`) get `group="3"` (hidden by
+    default); ground and leg contact geoms untouched. Without a shell the MJCF
+    is still byte-identical to the pre-integration fingerprint `e2c5cb7a…`.
+  * `tools/view_x500_visual.py`: default render groups {0, 2};
+    `--physics-overlay` adds group 3.
+  * Bundle README / THIRD_PARTY_NOTICES / YAML comments / `MUJOCO_MODEL.md`
+    updated for pinned provenance and the split shell.
+
+VALIDATION:
+  * Canonical bundle regenerated from
+    `PX4-Autopilot/Tools/simulation/gz` (source verified, git HEAD pinned,
+    clean): 9 OBJ + 2 STL + `cf.png`, gates passed. Regeneration from a plain
+    (non-git) copy and again after the vendor removal produced byte-identical
+    runtime files (meshes, textures, LICENSE, manifest).
+  * Runtime independence: a scratch copy of `landing_mujoco` + `landing_rl`
+    with no `vendor/` ran all 37 visualization tests (OK) and the viewer
+    (landed `success=True`); its render was pixel-identical to the in-repo
+    render; no runtime code/config references `vendor`.
+  * After removing `landing_mujoco/vendor/` (untracked, never committed; audit
+    list of the 42 removed files and their sha256 kept in the session
+    scratchpad): `landing_mujoco` suite 85 passed, 0 failed (48 prior + 37
+    visualization); `landing_rl` suite 218 passed, 0 failed (173.5 s).
+  * Physics invariance unchanged: structural exact equality (placeholder
+    markers differ only in `geom_group`) and bit-identical ON/OFF trajectories.
+
+RESULT (size): new/changed content 22.5 MB raw (bundle 22.2 MB), ≈5.6 MB as
+git zlib objects; 34 MB vendor copy not committed; landing-gear exclusion cut
+mesh bundle from ≈32 MB to 20.5 MB raw.
+
+`[CAUTION]` Prop RGBA remains the documented `Gazebo/DarkGrey` assumption;
+decals and OakD-Lite remain excluded.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD `7b231ef`,
+uncommitted: `landing_mujoco/{assets,tools,visualization}/`, visualization
+config + 4 test files, additive edits to `transforms.py`, `mjcf_builder.py`,
+`mujoco_dynamics.py`, `mujoco_landing_env.py`, `MUJOCO_MODEL.md`, this file.
+`landing_mujoco/vendor/` no longer exists. No changes under `landing_rl/` or
+`mujoco_rl/`.
+
+---
+
+### 2026-09-14 — SESSION CLOSEOUT / HANDOFF (x500 visualization accepted)
+
+`[FACT]` Final read-only audit before commit: every modified/untracked file
+belongs to the x500 MuJoCo visualization feature (6 modified tracked files,
+27 new files); no unrelated change; `landing_mujoco/vendor/` absent.
+
+REPOSITORY STATE
+  * worktree: `/home/qntmdghkss/drone_stack_rl_refactor`
+  * branch: `refactor/landing-rl-architecture`
+  * previous MuJoCo baseline: `7b231ef` ("Add provisional MuJoCo landing
+    simulation pipeline")
+  * new visualization commit: the commit that introduces this entry, subject
+    "Add x500 visual shell to MuJoCo landing environment", parent `7b231ef`
+    (a file cannot contain its own commit hash; resolve with
+    `git log -1 --format=%H -- PROJECT_HANDOVER.md`). Not pushed.
+
+VALIDATED STATE (final pre-commit run, 2026-09-14)
+  * `landing_rl`: 218 passed, 0 failed
+  * `landing_mujoco`: 85 passed, 0 failed
+  * visualization (`test_visualization_config`, `test_x500_visual_assets`,
+    `test_x500_visual_shell`, `test_visual_physics_invariance`): 37 passed,
+    0 failed
+
+VISUALIZATION DESIGN (accepted)
+  * PX4 x500 assets are a visual shell only; UGRP physical config alone
+    defines physics.
+  * visual scale ≈ 1.497522 (exactly 1.4975221199266826 = 0.737 /
+    0.49214631970583705); visual translation `[0, 0, 0]`; rotation `[0, 0, 0]`.
+  * split-shell landing gear: x500 upper airframe / motors / props + the
+    physical UGRP landing-gear contact geoms. The scaled x500 skids are not
+    used and the shell is not shifted vertically.
+  * visual ON/OFF physics is bit-identical (structural equality + trajectory
+    tests).
+
+ASSET PROVENANCE
+  * repository: `https://github.com/PX4/PX4-gazebo-models.git`
+  * commit: `d754381a1cecdd7f17050acd72bf5bf1327bced6` (pinned by
+    PX4-Autopilot `85df8c2281c2466b30a121b22b0bf33dc69bcfe4` as
+    `Tools/simulation/gz`)
+  * The duplicated vendor tree is intentionally NOT committed. Committed
+    instead: the derived runtime assets (`landing_mujoco/assets/x500_visual/`,
+    every source/output sha256 in `conversion_report.json`) and the
+    reproducible conversion tool
+    (`landing_mujoco/tools/convert_x500_visual_assets.py --source <checkout>`,
+    conversion-only dependencies trimesh/pycollada/Pillow, inputs verified
+    against pinned sha256).
+
+KNOWN REMAINING ISSUES / INTENTIONALLY UNRESOLVED
+  1. `[OPEN]` Real UGRP vehicle parameters are still unmeasured. Required:
+     `total_mass_kg`, `cg_body_m`, `Ixx`, `Iyy`, `Izz`,
+     `motor_positions_body_m`, `max_collective_thrust_n`, `tau_roll_s`,
+     `tau_pitch_s`, `tau_thrust_s`, `actuator_delay_s`
+     (`ugrp_vehicle_measured.yaml` still fails fast listing exactly these).
+  2. `[OPEN]` Landing-gear geometry is still provisional (synthetic
+     `ground_clearance_m` / `landing_gear_points_body_m`) and must be replaced
+     with measured geometry.
+  3. `[CAUTION]` The interactive MuJoCo viewer was not validated in the
+     headless Claude environment (GLFW `gladLoadGL error`); offscreen
+     (OSMesa) rendering is validated.
+  4. `[OPEN]` x500 propeller spin handedness (PX4 quad-X, front-right CCW)
+     differs from the current provisional UGRP spin guess (M1 front-right CW).
+     Do NOT change physics from the x500 model; verify the real vehicle's motor
+     index, location and CW/CCW direction later.
+  5. `[DECISION — standing]` Do not train PPO yet.
+
+NEXT-SESSION STARTING POINT
+Real vehicle parameter measurement / injection — not additional
+visualization work. Recommended order: mass → CG → inertia → motor positions
+→ landing-gear geometry → max collective thrust → roll/pitch/thrust response
+identification → actuator delay → real-flight vs MuJoCo validation.
