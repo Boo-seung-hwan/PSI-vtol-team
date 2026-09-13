@@ -1,0 +1,153 @@
+# PROVISIONAL_REFERENCE configuration.
+#
+# Purpose: exercise the MuJoCo software pipeline (coordinate transforms,
+# actuator plumbing, contact, 16-D observation contract) BEFORE the real
+# UGRP UAV is measured. Every non-informational numeric value below is
+# either a Tarot TL680B manufacturer reference number, a geometric
+# derivation from the wheelbase, or an explicitly synthetic test value.
+#
+# NONE of these values describe the actual assembled UGRP vehicle.
+# Every field that must be replaced before real training/evaluation carries
+# replace_before_real_training: true in its `meta` block.
+#
+# Airframe: Tarot TL680B, 4-motor quadcopter, non-folding, wheelbase 0.737 m.
+# Explicitly NOT the Tarot 680 Pro / TL68P00 (that is a hexacopter -- a
+# different vehicle) and NOT the X8 flying-wing VTOL model already present
+# under models/drone_default (a different project's airframe).
+
+parameter_set: PROVISIONAL_REFERENCE
+vehicle_name: "Tarot TL680B (manufacturer reference configuration -- NOT the measured UGRP vehicle)"
+
+mass_properties:
+  # Reference "takeoff mass" from published Tarot TL680B configurations.
+  # Includes frame + unloaded aircraft + battery reference figures; does not
+  # describe the actual assembled UGRP payload (camera, companion computer,
+  # landing gear, etc. are unknown at this stage).
+  mass_kg: 3.57
+  # Body frame origin is defined to coincide with the vehicle CG (see
+  # MUJOCO_MODEL.md). For the reference config we assume perfect geometric
+  # symmetry, i.e. CG at the frame center.
+  cg_body_m: [0.0, 0.0, 0.0]
+  inertia_kgm2:
+    ixx: null
+    iyy: null
+    izz: null
+  # "auto" => landing_mujoco.dynamics.inertia_estimation computes a
+  # provisional inertia tensor from the body/motor point-mass approximation
+  # below (parallel-axis theorem). This is NEVER a measured inertia.
+  inertia_estimation_mode: auto
+  meta:
+    mass_kg:
+      source: manufacturer_reference_configuration
+      confidence: low
+      replace_before_real_training: true
+    cg_body_m:
+      source: temporary_symmetry_assumption
+      confidence: low
+      replace_before_real_training: true
+    inertia_kgm2:
+      source: temporary_geometric_approximation
+      confidence: low
+      replace_before_real_training: true
+
+geometry:
+  wheelbase_m: 0.737
+  # R = wheelbase / 2 (motor radial distance from center, opposite-motor
+  # distance assumption).
+  arm_length_m: 0.3685
+  frame_footprint_m: [0.170, 0.170]
+  frame_height_m: 0.332
+  # Synthetic: distance from CG down to the lowest contact point when
+  # resting on the pad. Not derived from any Tarot spec sheet.
+  ground_clearance_m: 0.12
+  # Four legs, one under each motor arm, at ground_clearance_m below CG
+  # (FRD: +z is down). a = wheelbase / (2*sqrt(2)).
+  landing_gear_points_body_m:
+    - [0.2606, 0.2606, 0.12]
+    - [-0.2606, 0.2606, 0.12]
+    - [-0.2606, -0.2606, 0.12]
+    - [0.2606, -0.2606, 0.12]
+  meta:
+    ground_clearance_m: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    landing_gear_points_body_m: {source: derived_from_wheelbase_assuming_symmetric_X, confidence: low, replace_before_real_training: true}
+
+motors:
+  # Square-X layout derived from the wheelbase under the assumption that
+  # 0.737 m is the opposite-motor (diagonal) distance and the frame is a
+  # symmetric X quad: a = wheelbase / (2*sqrt(2)) ~= 0.2606 m. Motor plane
+  # assumed coplanar with the CG plane (z = 0) for this pipeline-test model.
+  positions_body_m:
+    M1: [0.2606, 0.2606, 0.0]
+    M2: [-0.2606, 0.2606, 0.0]
+    M3: [-0.2606, -0.2606, 0.0]
+    M4: [0.2606, -0.2606, 0.0]
+  # Standard alternating CW/CCW X assumption -- NOT confirmed against the
+  # actual vehicle wiring.
+  spin_directions:
+    M1: CW
+    M2: CCW
+    M3: CW
+    M4: CCW
+  # Synthetic per-motor point mass (motor + prop), used only to build the
+  # provisional inertia estimate below -- not a specific product spec.
+  mass_kg_each: 0.075
+  model: null
+  kv_rpm_per_v: null
+  meta:
+    positions_body_m: {source: derived_from_wheelbase_assuming_symmetric_X, confidence: low, replace_with_measured_r_Mi_minus_r_CG: true}
+    spin_directions: {source: DERIVED_ASSUMPTION, confidence: low, replace_before_real_training: true}
+    mass_kg_each: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+
+propellers:
+  model: null
+  diameter_m: null
+  pitch_m: null
+  blade_count: null
+
+battery:
+  model: null
+  nominal_voltage_v: null
+  # Reference battery mass from published Tarot TL680B configurations.
+  mass_kg: 1.66
+  position_body_m: [0.0, 0.0, 0.02]
+
+esc:
+  model: null
+  protocol: null
+  max_current_a: null
+
+thrust:
+  # Synthetic development-only thrust-to-weight ratio. Purpose: exercise
+  # thrust saturation / hover equilibrium / force-application plumbing only.
+  # Must be replaced before any real research training/evaluation.
+  thrust_to_weight_max: 2.0
+  max_collective_thrust_n: 70.02
+  meta:
+    max_collective_thrust_n: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+
+identified_response:
+  # Synthetic development-only closed-loop response parameters. These
+  # exercise the identified-response code path (rate/thrust first-order
+  # response + delay) only. They are NOT derived from any real flight data.
+  tau_roll_s: 0.15
+  tau_pitch_s: 0.15
+  tau_thrust_s: 0.20
+  # No yaw system-identification data exists for any vehicle in this repo;
+  # kept conservative per CLAUDE.md/task guidance -- yaw is secondary to the
+  # initial precision-landing physics validation.
+  tau_yaw_s: 0.30
+  delay_s: 0.02
+  K_roll: 1.0
+  K_pitch: 1.0
+  K_thrust: 1.0
+  K_yaw: 1.0
+  meta:
+    tau_roll_s: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    tau_pitch_s: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    tau_thrust_s: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    tau_yaw_s: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    delay_s: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    K_roll: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    K_pitch: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    K_thrust: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}
+    K_yaw: {source: SYNTHETIC_TEST, confidence: low, replace_before_real_training: true}

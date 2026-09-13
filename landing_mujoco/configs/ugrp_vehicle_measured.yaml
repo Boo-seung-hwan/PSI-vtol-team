@@ -1,0 +1,97 @@
+# MEASURED_VEHICLE configuration -- the future research configuration.
+#
+# All research-critical fields are `null` until the real UGRP UAV is
+# measured / system-identified. Loading this file (landing_mujoco.configs
+# .param_schema.load_uav_params) will raise MissingMeasurementError and list
+# exactly which measurements are still missing -- this is intentional
+# fail-fast behavior, not a bug.
+#
+# Do NOT fill any field here with a Tarot TL680B manufacturer reference
+# value, an internet spec, or a value copied from
+# tarot680b_reference.yaml -- those describe a different, unmeasured
+# vehicle and would misrepresent this file's contents as measured.
+#
+# inertia_estimation_mode is "manual" (not "auto") here on purpose: this
+# config must never fall back to the geometric provisional-inertia
+# approximation -- Ixx/Iyy/Izz must be entered directly once measured.
+
+parameter_set: MEASURED_VEHICLE
+vehicle_name: "UGRP precision-landing UAV (measured configuration -- pending measurement)"
+
+mass_properties:
+  mass_kg: null
+  cg_body_m: null
+  inertia_kgm2:
+    ixx: null
+    iyy: null
+    izz: null
+  inertia_estimation_mode: manual
+  meta:
+    mass_kg: {source: NOT_MEASURED, confidence: null, replace_before_real_training: false}
+    cg_body_m: {source: NOT_MEASURED, confidence: null, replace_before_real_training: false}
+    inertia_kgm2: {source: NOT_MEASURED, confidence: null, replace_before_real_training: false}
+
+geometry:
+  wheelbase_m: null
+  arm_length_m: null
+  frame_footprint_m: null
+  frame_height_m: null
+  ground_clearance_m: null
+  landing_gear_points_body_m: null
+  meta:
+    ground_clearance_m: {source: NOT_MEASURED}
+    landing_gear_points_body_m: {source: NOT_MEASURED}
+
+motors:
+  positions_body_m: null
+  spin_directions: null
+  mass_kg_each: null
+  model: null
+  kv_rpm_per_v: null
+  meta:
+    positions_body_m: {source: NOT_MEASURED}
+    spin_directions: {source: NOT_VERIFIED}
+
+propellers:
+  model: null
+  diameter_m: null
+  pitch_m: null
+  blade_count: null
+
+battery:
+  model: null
+  nominal_voltage_v: null
+  mass_kg: null
+  position_body_m: null
+
+esc:
+  model: null
+  protocol: null
+  max_current_a: null
+
+thrust:
+  max_collective_thrust_n: null
+  thrust_to_weight_max: null
+  meta:
+    max_collective_thrust_n: {source: NOT_MEASURED}
+
+identified_response:
+  tau_roll_s: null
+  tau_pitch_s: null
+  tau_thrust_s: null
+  tau_yaw_s: null
+  delay_s: null
+  K_roll: null
+  K_pitch: null
+  K_thrust: null
+  K_yaw: null
+  meta:
+    tau_roll_s: {source: NOT_IDENTIFIED}
+    tau_pitch_s: {source: NOT_IDENTIFIED}
+    tau_thrust_s: {source: NOT_IDENTIFIED}
+    tau_yaw_s: {source: NOT_IDENTIFIED}
+    delay_s: {source: NOT_IDENTIFIED}
+    K_roll: {source: NOT_IDENTIFIED}
+    K_pitch: {source: NOT_IDENTIFIED}
+    K_thrust: {source: NOT_IDENTIFIED}
+    K_yaw: {source: NOT_IDENTIFIED}
