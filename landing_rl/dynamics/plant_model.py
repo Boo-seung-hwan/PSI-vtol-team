@@ -20,9 +20,23 @@ and ``ContactModel`` logic are used unmodified and unchanged; ``PlantModel``
 only reproduces the existing execution order that used to live inline in
 ``LandingEnv``.
 
+MuJoCo-integration interface seam: ``dynamics`` is now typed as
+``VehicleDynamicsBackend`` (see ``vehicle_dynamics_backend.py``) rather than
+the concrete ``LegacyVehicleDynamics`` class. ``PlantModel`` calls exactly
+one method on it -- ``advance_free_flight(...)`` -- with the exact same
+arguments as before; this is a type-hint/documentation change only. The
+constructor still accepts ANY object exposing a matching
+``advance_free_flight`` method (this was already true before this Protocol
+existed -- Python duck typing, and already exercised by
+``test_plant_model.py::PlantModelOrchestrationOrderTest``'s hand-written fake
+dynamics object). ``LandingEnv`` is the only caller that constructs
+``PlantModel``, and it always passes a ``LegacyVehicleDynamics`` instance --
+that remains the one and only runtime backend after this change.
+
 Ownership
 ---------
-Owns ONLY ``cfg``, ``dynamics`` (a ``LegacyVehicleDynamics``), and ``contact``
+Owns ONLY ``cfg``, ``dynamics`` (any ``VehicleDynamicsBackend``; the current,
+only concrete implementation is ``LegacyVehicleDynamics``), and ``contact``
 (a ``ContactModel``). Does NOT own an RNG, a ``VehicleState``, a ``LandingEnv``
 reference, wind state, target state, or response-alpha state. ``rng`` must be
 ``LandingEnv.np_random``; ``PlantModel`` passes it straight through to
@@ -49,6 +63,8 @@ value; it re-syncs its own flat compatibility mirrors from ``contact.state`` /
 
 from __future__ import annotations
 
+from landing_rl.dynamics.vehicle_dynamics_backend import VehicleDynamicsBackend
+
 
 class PlantModel:
     """Orchestrates one control step of free-flight dynamics + ground contact.
@@ -60,7 +76,7 @@ class PlantModel:
     pre-extraction ``LandingEnv`` orchestration used.
     """
 
-    def __init__(self, cfg, dynamics, contact):
+    def __init__(self, cfg, dynamics: VehicleDynamicsBackend, contact):
         self.cfg = cfg
         self.dynamics = dynamics
         self.contact = contact

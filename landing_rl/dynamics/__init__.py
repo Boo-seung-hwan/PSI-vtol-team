@@ -21,18 +21,39 @@ checkpoint gate remain authoritative.
 instance, and the compatibility-mirror sync calls; it calls
 ``PlantModel.step(...)`` once per control step and re-syncs its flat mirrors
 from the (mutated in place) ``VehicleState`` / ``ContactModel`` afterward.
+
+MuJoCo-integration interface seam: ``PlantModel`` now depends on the
+``VehicleDynamicsBackend`` Protocol (see ``vehicle_dynamics_backend``)
+rather than on the concrete ``LegacyVehicleDynamics`` class. This is a
+type-level/documentation change only -- ``LandingEnv`` still constructs and
+wires ``LegacyVehicleDynamics`` as the one and only runtime backend, and
+``LegacyVehicleDynamics`` satisfies the Protocol structurally with no code
+change of its own. No behavior change; see
+``test_vehicle_dynamics_backend.py``.
+
+Control/physics boundary: the controller-side velocity-command-to-setpoint
+conversion (formerly ``LegacyVehicleDynamics._velocity_command_to_inner_loop_setpoints``)
+has been extracted into ``InnerLoopCommandModel`` (see
+``inner_loop_command_model``). ``LegacyVehicleDynamics`` constructs and owns
+one internally; no other collaborator wiring changed. No behavior change;
+see ``test_inner_loop_command_model.py``.
 """
 
+from landing_rl.dynamics.inner_loop_command_model import InnerLoopCommand, InnerLoopCommandModel
 from landing_rl.dynamics.legacy_dynamics import LegacyVehicleDynamics
 from landing_rl.dynamics.plant_model import PlantModel
 from landing_rl.dynamics.process_noise import ProcessNoiseSampler
 from landing_rl.dynamics.response_alphas import ResponseAlphas
+from landing_rl.dynamics.vehicle_dynamics_backend import VehicleDynamicsBackend
 from landing_rl.dynamics.vehicle_state import VehicleState
 
 __all__ = [
+    "InnerLoopCommand",
+    "InnerLoopCommandModel",
     "LegacyVehicleDynamics",
     "PlantModel",
     "ProcessNoiseSampler",
     "ResponseAlphas",
+    "VehicleDynamicsBackend",
     "VehicleState",
 ]

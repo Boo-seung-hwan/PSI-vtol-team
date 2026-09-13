@@ -5,7 +5,7 @@ Phase 13C-1 extraction. This module holds the FREE-FLIGHT portion of
 ``mujoco_rl/envs/env_prototype.py`` (the immutable reference), specifically the
 D4-D25 span of the Phase-12 execution audit:
 
-    _velocity_command_to_inner_loop_setpoints   (PX4-cascade proxy)
+    inner-loop command generation       (PX4-cascade proxy; see below)
     motor-cutoff thrust-setpoint override
     attitude/rate controller proxy + body-rate first-order response
     body-rate process noise            (ProcessNoiseSampler, draw 1 of 3)
@@ -33,6 +33,22 @@ Copied character-for-character, with only:
     _velocity_command_to_inner_loop_setpoints / _compute_ground_effect_factor /
     _altitude_agl  ->  local equivalents
 
+Control/physics boundary (this phase): the former private method
+``_velocity_command_to_inner_loop_setpoints`` (velocity command -> attitude/
+thrust setpoint, the CONTROL-side portion of the PX4-cascade proxy) has been
+extracted verbatim into ``InnerLoopCommandModel`` (see
+``inner_loop_command_model.py``). ``LegacyVehicleDynamics`` constructs its own
+``InnerLoopCommandModel`` internally (own only ``cfg``, stateless, zero RNG)
+and calls ``self.inner_loop_command_model.compute(...)`` at the exact call
+site the old method occupied; the motor-cutoff override on
+``thrust_accel_setpoint`` stays here (it reads ``ContactModel``-owned
+persistent state, a physics-side concept), applied to the returned command
+immediately after ``compute()``, exactly where it already sat. No behavior
+change, no RNG draw added/removed/reordered, and the
+``VehicleDynamicsBackend`` contract (``advance_free_flight``'s signature) is
+unchanged -- this split is realized entirely as composition inside this
+class, not by moving the call across the ``PlantModel`` boundary.
+
 What is NOT here (Phase 13C-1 boundary -- these stay in ``LandingEnv``)
 --------------------------------------------------------------------
 * ``contact.begin_step()`` (D2) and the ``vel_before`` snapshot.
@@ -44,11 +60,12 @@ What is NOT here (Phase 13C-1 boundary -- these stay in ``LandingEnv``)
 
 Ownership
 ---------
-``LegacyVehicleDynamics`` owns ONLY ``cfg`` and the already-extracted
-``ProcessNoiseSampler`` (``process_noise``). It does NOT own an RNG, a
-``VehicleState``, a ``ContactModel``, a ``LandingEnv`` reference, wind state,
-response-alpha state, or target state. ``noise_scale`` is a local of
-``advance_free_flight`` (unchanged expression
+``LegacyVehicleDynamics`` owns ``cfg``, the already-extracted
+``ProcessNoiseSampler`` (``process_noise``), and now ``inner_loop_command_model``
+(an ``InnerLoopCommandModel`` it constructs itself from ``cfg``). It does NOT
+own an RNG, a ``VehicleState``, a ``ContactModel``, a ``LandingEnv`` reference,
+wind state, response-alpha state, or target state. ``noise_scale`` is a local
+of ``advance_free_flight`` (unchanged expression
 ``sqrt(dt_safe / max(cfg.dt, 1e-6))``); the sampler still receives it as an
 argument. ``cfg.attitude_process_noise_std_rad`` remains unused -- the legacy
 dynamics performs exactly three process-noise draws.
@@ -64,6 +81,7 @@ import math
 
 import numpy as np
 
+from landing_rl.dynamics.inner_loop_command_model import InnerLoopCommandModel
 from landing_rl.dynamics.vehicle_state import VehicleState
 
 
@@ -75,11 +93,18 @@ def wrap_pi(angle: float) -> float:
 class LegacyVehicleDynamics:
     """Free-flight rigid-body integrator + PX4-cascade proxy. Stateless beyond
     ``cfg`` and ``process_noise``; ``advance_free_flight`` mutates the
-    ``VehicleState`` handed in and takes ``LandingEnv.np_random`` as ``rng``."""
+    ``VehicleState`` handed in and takes ``LandingEnv.np_random`` as ``rng``.
+
+    Satisfies the ``VehicleDynamicsBackend`` Protocol (see
+    ``vehicle_dynamics_backend.py``) structurally, with no code change of its
+    own -- this class is unchanged by that Protocol's introduction and
+    remains the one and only backend ``LandingEnv`` wires into ``PlantModel``.
+    """
 
     def __init__(self, cfg, process_noise):
         self.cfg = cfg
         self.process_noise = process_noise
+        self.inner_loop_command_model = InnerLoopCommandModel(cfg)
 
     # ------------------------------------------------------------------
     # verbatim helpers (self.<field> -> state.<field>)
@@ -129,73 +154,6 @@ class LegacyVehicleDynamics:
             dtype=np.float64,
         )
 
-    def _velocity_command_to_inner_loop_setpoints(
-        self,
-        state: VehicleState,
-        v_cmd: np.ndarray,
-        dt: float,
-        target_yaw: float,
-    ) -> tuple[np.ndarray, float, np.ndarray]:
-        """Convert velocity command to attitude/thrust setpoints.
-
-        Verbatim copy of ``LandingEnv._velocity_command_to_inner_loop_setpoints``
-        with ``self.vel`` -> ``state.vel`` and ``self.target_yaw`` ->
-        ``target_yaw``.
-
-        This approximates the PX4 cascade:
-            velocity command -> acceleration demand -> attitude/thrust setpoint.
-
-        NED convention is used. Positive z acceleration means downward
-        acceleration, so it is produced by reducing collective thrust below
-        hover thrust.
-        """
-        dt_safe = max(float(dt), 1e-6)
-        g = float(self.cfg.gravity_mps2)
-
-        # Desired NED acceleration from velocity error. This replaces the old
-        # direct first-order velocity response with a physically interpretable
-        # acceleration request.
-        accel_cmd = (np.asarray(v_cmd, dtype=np.float64) - state.vel) / max(
-            self.cfg.vel_cmd_tau_s,
-            dt_safe,
-        )
-
-        axy_norm = float(np.linalg.norm(accel_cmd[:2]))
-        if axy_norm > self.cfg.max_cmd_accel_xy_mps2:
-            accel_cmd[:2] *= self.cfg.max_cmd_accel_xy_mps2 / (axy_norm + 1e-9)
-        accel_cmd[2] = float(np.clip(
-            accel_cmd[2],
-            -self.cfg.max_cmd_accel_z_mps2,
-            self.cfg.max_cmd_accel_z_mps2,
-        ))
-
-        # Near-hover multicopter tilt approximation in NED.
-        # +roll produces +East acceleration. +pitch produces -North acceleration.
-        denom = max(g - float(accel_cmd[2]), 1e-3)
-        roll_sp = math.atan2(float(accel_cmd[1]), denom)
-        pitch_sp = math.atan2(-float(accel_cmd[0]), denom)
-
-        roll_sp = float(np.clip(
-            roll_sp,
-            -self.cfg.max_tilt_target_rad,
-            self.cfg.max_tilt_target_rad,
-        ))
-        pitch_sp = float(np.clip(
-            pitch_sp,
-            -self.cfg.max_tilt_target_rad,
-            self.cfg.max_tilt_target_rad,
-        ))
-
-        yaw_sp = float(target_yaw)
-        thrust_sp = float(np.clip(
-            g - float(accel_cmd[2]),
-            self.cfg.min_thrust_accel_mps2,
-            self.cfg.max_thrust_accel_mps2,
-        ))
-
-        attitude_sp = np.array([roll_sp, pitch_sp, yaw_sp], dtype=np.float64)
-        return attitude_sp, thrust_sp, accel_cmd
-
     # ------------------------------------------------------------------
     # free-flight integration -- verbatim D4-D25 of _update_rigid_body_dynamics
     # ------------------------------------------------------------------
@@ -228,9 +186,12 @@ class LegacyVehicleDynamics:
         dt_safe = max(float(dt), 1e-6)
         g = float(self.cfg.gravity_mps2)
 
-        attitude_sp, thrust_sp, accel_cmd = self._velocity_command_to_inner_loop_setpoints(
+        inner_loop_command = self.inner_loop_command_model.compute(
             state, v_cmd, dt_safe, target_yaw
         )
+        attitude_sp = inner_loop_command.attitude_setpoint
+        thrust_sp = inner_loop_command.thrust_accel_setpoint
+        accel_cmd = inner_loop_command.accel_cmd
         if motor_cutoff:
             thrust_sp = float(self.cfg.motor_cutoff_thrust_accel_mps2)
 

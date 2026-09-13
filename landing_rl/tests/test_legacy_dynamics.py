@@ -388,12 +388,25 @@ class LegacyDynamicsReplicaParityTest(unittest.TestCase):
 class LegacyDynamicsStructuralTest(unittest.TestCase):
     """Section 19: no component-owned RNG, no env reference."""
 
-    def test_backend_owns_only_cfg_and_process_noise(self):
+    def test_backend_owns_only_cfg_process_noise_and_inner_loop_command_model(self):
         cfg = NewLandingConfig()
         lvd = LegacyVehicleDynamics(cfg, ProcessNoiseSampler(cfg))
-        self.assertEqual(set(vars(lvd)), {"cfg", "process_noise"})
+        self.assertEqual(
+            set(vars(lvd)), {"cfg", "process_noise", "inner_loop_command_model"}
+        )
         for banned in ("np_random", "rng", "state", "env", "_env", "contact"):
             self.assertFalse(hasattr(lvd, banned), banned)
+
+    def test_inner_loop_command_model_owns_only_cfg(self):
+        from landing_rl.dynamics import InnerLoopCommandModel
+
+        cfg = NewLandingConfig()
+        lvd = LegacyVehicleDynamics(cfg, ProcessNoiseSampler(cfg))
+        icm = lvd.inner_loop_command_model
+        self.assertIsInstance(icm, InnerLoopCommandModel)
+        self.assertEqual(set(vars(icm)), {"cfg"})
+        for banned in ("np_random", "rng", "state", "env", "_env", "contact"):
+            self.assertFalse(hasattr(icm, banned), banned)
 
     def test_vehicle_state_has_no_rng_or_cfg(self):
         st = _make_state({})

@@ -61,6 +61,7 @@ from landing_rl.contact import ContactModel, ContactResult, ContactState
 from landing_rl.controllers import BaselineController
 from landing_rl.disturbances import DisturbanceModel
 from landing_rl.dynamics import (
+    InnerLoopCommandModel,
     LegacyVehicleDynamics,
     PlantModel,
     ProcessNoiseSampler,
@@ -220,6 +221,9 @@ class Freeze00_ComponentGraphAndOwnershipTest(unittest.TestCase):
             self.assertIsInstance(env.process_noise, ProcessNoiseSampler)
             self.assertIsInstance(env._vehicle_state, VehicleState)
             self.assertIsInstance(env.legacy_dynamics, LegacyVehicleDynamics)
+            self.assertIsInstance(
+                env.legacy_dynamics.inner_loop_command_model, InnerLoopCommandModel
+            )
             self.assertIsInstance(env.contact, ContactModel)
             self.assertIsInstance(env.contact.state, ContactState)
             self.assertIsInstance(env.contact.result, ContactResult)
@@ -230,6 +234,24 @@ class Freeze00_ComponentGraphAndOwnershipTest(unittest.TestCase):
             # LegacyVehicleDynamics.
             self.assertIs(env.plant.dynamics, env.legacy_dynamics)
             self.assertIs(env.plant.contact, env.contact)
+
+            # VehicleDynamicsBackend contract unchanged by the control/physics
+            # split: PlantModel still calls advance_free_flight(state, v_cmd,
+            # dt, rng, wind_accel, target_yaw, body_rate_response_alpha,
+            # thrust_response_alpha, motor_cutoff, ground_contact) -- the
+            # InnerLoopCommandModel split is realized entirely inside
+            # LegacyVehicleDynamics, not by changing this signature.
+            import inspect
+
+            sig = inspect.signature(LegacyVehicleDynamics.advance_free_flight)
+            self.assertEqual(
+                list(sig.parameters),
+                [
+                    "self", "state", "v_cmd", "dt", "rng", "wind_accel",
+                    "target_yaw", "body_rate_response_alpha",
+                    "thrust_response_alpha", "motor_cutoff", "ground_contact",
+                ],
+            )
         finally:
             env.close()
 
@@ -237,7 +259,13 @@ class Freeze00_ComponentGraphAndOwnershipTest(unittest.TestCase):
         env = NewLandingEnv(NewLandingConfig())
         try:
             self.assertEqual(set(vars(env.plant)), {"cfg", "dynamics", "contact"})
-            self.assertEqual(set(vars(env.legacy_dynamics)), {"cfg", "process_noise"})
+            self.assertEqual(
+                set(vars(env.legacy_dynamics)),
+                {"cfg", "process_noise", "inner_loop_command_model"},
+            )
+            self.assertEqual(
+                set(vars(env.legacy_dynamics.inner_loop_command_model)), {"cfg"}
+            )
 
             components = (
                 ("controller", env.controller),
@@ -251,6 +279,7 @@ class Freeze00_ComponentGraphAndOwnershipTest(unittest.TestCase):
                 ("response_alphas", env.response_alphas),
                 ("process_noise", env.process_noise),
                 ("legacy_dynamics", env.legacy_dynamics),
+                ("inner_loop_command_model", env.legacy_dynamics.inner_loop_command_model),
                 ("contact", env.contact),
                 ("plant", env.plant),
             )
