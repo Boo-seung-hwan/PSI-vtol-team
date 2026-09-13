@@ -5,7 +5,19 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 from stable_baselines3.common.monitor import Monitor
 
-from envs.env_prototype import LandingEnv, LandingConfig
+# --- landing_rl canonical-environment migration -------------------------
+# mujoco_rl/envs/env_prototype.py::LandingEnv is kept as the frozen legacy
+# reference (see landing_rl/tests/test_legacy_regression_contract.py). This
+# script now imports the parity-verified modular implementation instead.
+# Only the import path changes; make_config() below is untouched.
+import pathlib
+import sys
+
+_LANDING_RL_REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+if str(_LANDING_RL_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_LANDING_RL_REPO_ROOT))
+
+from landing_rl.envs.landing_env import LandingEnv, LandingConfig
 
 
 def make_config():
