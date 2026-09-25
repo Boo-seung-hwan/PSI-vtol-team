@@ -1,3 +1,23 @@
+"""DEPRECATED / LEGACY -- DO NOT USE FOR BASELINE EVALUATION.
+
+Historical stage-1 evaluation kept for reference only. The RL Baseline v0.1
+evaluation is mujoco_rl/eval_compare_v2.py and mujoco_rl/eval_robustness_paper.py
+(see BASELINE.md).
+
+Known history of this file:
+  * The model evaluated below is the stage-1 checkpoint
+    (ppo_landing_residual_v3_stage1_final.zip). It was originally paired with
+    the STAGE-0 VecNormalize statistics (vecnormalize_v3_stage0.pkl), i.e. a
+    model/normalization generation mismatch. The pair is now the one saved
+    together by train_ppo_v3_long.py (vecnormalize_v3_stage1.pkl), so results
+    differ from any number produced by the old mismatched version.
+  * Despite the file name, make_config() below is the stage-1 training
+    configuration (1% target dropout), not the stage-0 one: the stage-0
+    VecNormalize statistics show no invalid-target samples at all.
+  * It still relies on ./runs relative to the working directory (run it from
+    mujoco_rl/), unlike the canonical evaluation scripts.
+"""
+
 import numpy as np
 from collections import Counter
 
@@ -57,8 +77,10 @@ def make_stage0_env():
 def make_vecnormalize_env(seed: int = 0):
     env = DummyVecEnv([make_stage0_env])
 
-    # 학습 때 저장한 VecNormalize statistics 복원
-    env = VecNormalize.load("./runs/vecnormalize_v3_stage0.pkl", env)
+    # 학습 때 저장한 VecNormalize statistics 복원.
+    # evaluated model = stage-1 checkpoint => matching stats are the stage-1 pair
+    # (see the module docstring for the previous stage-0 mismatch).
+    env = VecNormalize.load("./runs/vecnormalize_v3_stage1.pkl", env)
 
     # 평가 모드
     env.training = False
@@ -134,6 +156,12 @@ def run_eval(name, policy_fn, n_eval=200):
 
 
 def main():
+    print(
+        "WARNING: eval_env_stage0.py is DEPRECATED / LEGACY -- do not use it for baseline "
+        "evaluation. Use mujoco_rl/eval_compare_v2.py or eval_robustness_paper.py (BASELINE.md).",
+        file=sys.stderr,
+    )
+
     # PPO용 env를 만들어서 model에 연결
     ppo_env = make_vecnormalize_env(seed=0)
 

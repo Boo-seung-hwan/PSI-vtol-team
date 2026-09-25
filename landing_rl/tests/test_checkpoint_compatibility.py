@@ -37,29 +37,42 @@ OLD obs == raw NEW obs is already the Phase 1-4 gate, and both wrappers load
 the same frozen ``obs_rms``, so normalized observations must match exactly;
 no tolerance is introduced here.
 
-Skip behavior
--------------
-If ``stable_baselines3`` is unavailable, or the primary artifacts are not
-present (``mujoco_rl/runs/`` is git-ignored and absent from the refactor
-worktree; the files are read in place from the original worktree by absolute
-path), the artifact-dependent tests SKIP with an explicit message. If the
-artifacts ARE present the tests actually run. No checkpoint is copied, moved,
-symlinked, modified, or committed.
+Artifact location and skip behavior
+-----------------------------------
+The artifacts are NOT in git. They are looked up by
+``landing_rl.evaluation.artifacts``: ``$UGRP_RL_ARTIFACT_DIR`` if set, else
+``<repo>/mujoco_rl/runs`` (see MODEL_ARTIFACTS.md). No machine-specific path
+is hard-coded here.
+
+If ``stable_baselines3`` is unavailable, or the artifacts are not present, the
+artifact-dependent tests SKIP with a message that names the missing files and
+the environment variable to set. Because a skipped gate protects nothing, set
+``UGRP_RL_REQUIRE_ARTIFACTS=1`` (e.g. for a release check) to make the same
+condition a hard failure instead of a skip. If the artifacts ARE present the
+tests actually run. No checkpoint is copied, moved, symlinked, modified, or
+committed.
 
 Run from the worktree root:
 
-    python3 -m unittest discover -s landing_rl/tests -p "test_*.py"
+    UGRP_RL_ARTIFACT_DIR=/path/to/artifacts \\
+        python3 -m unittest discover -s landing_rl/tests -p "test_*.py"
 """
 
 from __future__ import annotations
 
 import math
 import pathlib
+import sys
 import unittest
 
 import numpy as np
 
-from test_legacy_regression_contract import (
+_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from landing_rl.evaluation import artifacts as _artifacts  # noqa: E402
+from test_legacy_regression_contract import (  # noqa: E402
     CONFIG_SPECS,
     NewLandingConfig,
     NewLandingEnv,
@@ -69,22 +82,16 @@ from test_legacy_regression_contract import (
 )
 
 # ---------------------------------------------------------------------------
-# Primary artifacts. ``mujoco_rl/runs/`` is git-ignored and is not present in
-# this refactor worktree, so read the artifacts in place from the original
-# worktree by absolute path. Do NOT copy / move / symlink / modify / commit.
+# Primary artifacts (git-ignored; see the module docstring). Read in place;
+# do NOT copy / move / symlink / modify / commit.
 # ---------------------------------------------------------------------------
 
-_PRIMARY_RUNS = pathlib.Path("/home/qntmdghkss/drone_stack/mujoco_rl/runs")
-_CKPT = _PRIMARY_RUNS / "ppo_landing_residual_v4_stage2_contact_final.zip"
-_VECNORM = _PRIMARY_RUNS / "vecnormalize_v4_stage2_contact.pkl"
+_CKPT = _artifacts.default_model_path()
+_VECNORM = _artifacts.default_vecnorm_path()
 
-_ARTIFACTS_OK = _CKPT.is_file() and _VECNORM.is_file()
-_ARTIFACTS_MSG = (
-    "primary artifacts present"
-    if _ARTIFACTS_OK
-    else f"primary artifact(s) missing under {_PRIMARY_RUNS}: "
-    f"ckpt={_CKPT.is_file()} vecnormalize={_VECNORM.is_file()}"
-)
+_ARTIFACTS_PROBLEM = _artifacts.missing_artifact_message(_CKPT, _VECNORM)
+_ARTIFACTS_OK = _ARTIFACTS_PROBLEM is None
+_ARTIFACTS_MSG = "primary artifacts present" if _ARTIFACTS_OK else _ARTIFACTS_PROBLEM
 
 try:  # SB3 is an existing project dependency; no new dependency is added.
     from stable_baselines3 import PPO
@@ -172,11 +179,21 @@ def _val_equal(x, y) -> bool:
 
 
 @unittest.skipUnless(_SB3_OK, _SB3_MSG)
-@unittest.skipUnless(_ARTIFACTS_OK, _ARTIFACTS_MSG)
 class CheckpointCompatibilityTest(unittest.TestCase):
     """OLD vs NEW compatibility with the real PPO / VecNormalize artifacts."""
 
     maxDiff = None
+
+    @classmethod
+    def setUpClass(cls):
+        if _ARTIFACTS_OK:
+            return
+        if _artifacts.artifacts_required():
+            raise AssertionError(
+                f"{_artifacts.REQUIRE_ARTIFACTS_ENV} is set but the checkpoint gate cannot run: "
+                + _ARTIFACTS_MSG
+            )
+        raise unittest.SkipTest(_ARTIFACTS_MSG)
 
     # -- config of record -------------------------------------------------
 

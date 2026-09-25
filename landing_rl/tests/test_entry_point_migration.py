@@ -159,18 +159,26 @@ CHECKPOINT_LITERALS = {
         "./runs/vecnormalize_v3_stage2_contact.pkl",
         "./runs/vecnormalize_v4_stage2_contact.pkl",
     ],
-    "eval_compare_v2.py": [
-        "./runs/ppo_landing_residual_v4_stage2_contact_final.zip",
-        "./runs/vecnormalize_v4_stage2_contact.pkl",
-    ],
+    # eval_compare_v2.py / eval_robustness_paper.py no longer spell the pair of
+    # record as "./runs/..." literals: they resolve it CWD-independently through
+    # landing_rl.evaluation.artifacts. Their pair-of-record identity is pinned by
+    # test_C_canonical_eval_scripts_use_pair_of_record instead, and by
+    # test_evaluation_artifacts.py.
+    #
+    # eval_env_stage0.py evaluates the stage-1 checkpoint; its VecNormalize was
+    # corrected from the stage-0 file to the stage-1 file saved together with
+    # that checkpoint by train_ppo_v3_long.py (see the script's docstring).
     "eval_env_stage0.py": [
-        "./runs/vecnormalize_v3_stage0.pkl",
-    ],
-    "eval_robustness_paper.py": [
-        "./runs/ppo_landing_residual_v4_stage2_contact_final.zip",
-        "./runs/vecnormalize_v4_stage2_contact.pkl",
+        "./runs/ppo_landing_residual_v3_stage1_final.zip",
+        "./runs/vecnormalize_v3_stage1.pkl",
     ],
 }
+
+# The pair of record that the canonical evaluation scripts must default to.
+PAIR_OF_RECORD = (
+    "ppo_landing_residual_v4_stage2_contact_final.zip",
+    "vecnormalize_v4_stage2_contact.pkl",
+)
 
 SEEDS = tuple(range(10))  # 0..9, per migration task section 6 minimum
 MAIN_PATTERNS = ("zero", "pseudo_random", "saturation")
@@ -324,6 +332,22 @@ class EntryPointMigrationTest(unittest.TestCase):
                         literal, text,
                         f"{relpath} no longer contains expected literal {literal!r}",
                     )
+
+    def test_C_canonical_eval_scripts_use_pair_of_record(self):
+        """The canonical evaluation scripts resolve exactly the v4 stage-2
+        model / VecNormalize pair of record (same generation), through the
+        shared artifacts module, with no CWD-relative './runs' literal."""
+        from landing_rl.evaluation import artifacts
+
+        self.assertEqual(
+            (artifacts.BASELINE_MODEL_NAME, artifacts.BASELINE_VECNORM_NAME),
+            PAIR_OF_RECORD,
+        )
+        for relpath in ("eval_compare_v2.py", "eval_robustness_paper.py"):
+            with self.subTest(script=relpath):
+                text = (_MUJOCO_RL_DIR / relpath).read_text()
+                self.assertIn("landing_rl.evaluation", text)
+                self.assertNotIn('"./runs/', text)
 
     # -- D: exact OLD-vs-NEW parity for every real script config -------------
 

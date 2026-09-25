@@ -23,6 +23,16 @@ Outputs
 The paired CSV supports episode-wise PID-vs-PPO analysis and exact McNemar
 (binomial) testing. Touchdown-speed means reported in the summary are computed
 on successful landing episodes only, so timeout zero-values cannot bias them.
+
+Usage (paths never depend on the working directory)
+---------------------------------------------------
+    python -m mujoco_rl.eval_robustness_paper --policy pid --output-dir OUT
+    python -m mujoco_rl.eval_robustness_paper --model M.zip --vecnorm V.pkl --output-dir OUT
+
+``--policy pid`` evaluates PID only: it loads no PPO model and no VecNormalize
+file and writes no paired CSV. The default ``--policy all`` keeps the original
+behaviour (PID + PPO, plus Random in E_mixed) and requires the PPO model AND
+its matching VecNormalize statistics (see MODEL_ARTIFACTS.md).
 """
 
 from __future__ import annotations
@@ -54,11 +64,9 @@ if str(_LANDING_RL_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_LANDING_RL_REPO_ROOT))
 
 from landing_rl.envs.landing_env import LandingEnv, LandingConfig
+from landing_rl.evaluation import artifacts
 
 
-DEFAULT_MODEL = "./runs/ppo_landing_residual_v4_stage2_contact_final.zip"
-DEFAULT_VECNORM = "./runs/vecnormalize_v4_stage2_contact.pkl"
-DEFAULT_OUTPUT_DIR = "./runs/paper_eval"
 DEFAULT_N_EVAL = 200
 DEFAULT_SEED_START = 7000
 
@@ -172,11 +180,15 @@ def make_case_env(case_name: str):
     return Monitor(LandingEnv(make_config(case_name)))
 
 
-def make_eval_env(case_name: str, vecnormalize_path: str, seed: int):
+def make_eval_env(case_name: str, vecnormalize_path: Optional[str], seed: int):
+    """``vecnormalize_path=None`` gives the bare environment (PID / Random,
+    which ignore observations); a path wraps it in the frozen VecNormalize
+    statistics belonging to the PPO model being evaluated."""
     env = DummyVecEnv([lambda: make_case_env(case_name)])
-    env = VecNormalize.load(vecnormalize_path, env)
-    env.training = False
-    env.norm_reward = False
+    if vecnormalize_path is not None:
+        env = VecNormalize.load(vecnormalize_path, env)
+        env.training = False
+        env.norm_reward = False
     env.seed(seed)
     return env
 
@@ -283,8 +295,8 @@ def run_eval(
     *,
     case_name: str,
     controller: str,
-    model: PPO,
-    vecnormalize_path: str,
+    model: Optional[PPO],
+    vecnormalize_path: Optional[str],
     n_eval: int,
     seed_start: int,
     print_timeouts: int = 0,
@@ -332,6 +344,7 @@ def run_eval(
             if controller == "PID":
                 action = np.zeros((1, 3), dtype=np.float32)
             elif controller == "PPO":
+                assert model is not None, "PPO controller requires a loaded model"
                 action, _ = model.predict(obs, deterministic=True)
             elif controller == "Random":
                 assert random_rng is not None
@@ -592,6 +605,7 @@ def write_config_report(
 ) -> None:
     lines: List[str] = []
     lines.append("PPO residual landing robustness evaluation\n")
+    lines.append(f"policy={args.policy}\n")
     lines.append(f"model={args.model}\n")
     lines.append(f"vecnormalize={args.vecnormalize}\n")
     lines.append(f"n_eval={args.n_eval}\n")
@@ -620,13 +634,36 @@ def write_config_report(
 # CLI / main
 # -----------------------------------------------------------------------------
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Paper-oriented PID-vs-PPO robustness evaluation."
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL)
-    parser.add_argument("--vecnormalize", default=DEFAULT_VECNORM)
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument(
+        "--policy",
+        choices=("all", "pid"),
+        default="all",
+        help="'pid' evaluates PID only and needs no PPO artifacts (no paired CSV). "
+        "Default 'all' keeps the original PID + PPO (+ Random in E_mixed) run.",
+    )
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=f"PPO .zip. Default: <artifact dir>/{artifacts.BASELINE_MODEL_NAME}",
+    )
+    parser.add_argument(
+        "--vecnorm",
+        "--vecnormalize",
+        dest="vecnormalize",
+        default=None,
+        help="VecNormalize .pkl matching --model. "
+        f"Default: <artifact dir>/{artifacts.BASELINE_VECNORM_NAME}",
+    )
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        help="Where to write the CSV/config files. Default: <repo>/mujoco_rl/runs/paper_eval "
+        "(never the artifact dir).",
+    )
     parser.add_argument("--n-eval", type=int, default=DEFAULT_N_EVAL)
     parser.add_argument("--seed-start", type=int, default=DEFAULT_SEED_START)
     parser.add_argument(
@@ -648,29 +685,41 @@ def parse_args() -> argparse.Namespace:
         metavar="N",
         help="Print at most N timeout rows per controller/case (default: 0).",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> None:
-    args = parse_args()
+def main(argv: Optional[Sequence[str]] = None) -> None:
+    args = parse_args(argv)
 
     if args.n_eval <= 0:
         raise ValueError("--n-eval must be positive")
 
-    model_path = Path(args.model)
-    vec_path = Path(args.vecnormalize)
-    if not model_path.exists():
-        raise FileNotFoundError(f"PPO model not found: {model_path}")
-    if not vec_path.exists():
-        raise FileNotFoundError(f"VecNormalize file not found: {vec_path}")
+    pid_only = args.policy == "pid"
+    model: Optional[PPO] = None
+    model_path: Optional[Path] = None
+    vec_path: Optional[Path] = None
 
-    out_dir = Path(args.output_dir)
+    if pid_only:
+        # PID never touches observations, so no PPO model / VecNormalize is
+        # loaded, and there is nothing to pair against or to randomize.
+        args.skip_random_mixed = True
+        args.model = args.vecnormalize = "n/a (PID only)"
+    else:
+        model_path = Path(args.model) if args.model else artifacts.default_model_path()
+        vec_path = Path(args.vecnormalize) if args.vecnormalize else artifacts.default_vecnorm_path()
+        problem = artifacts.missing_artifact_message(model_path, vec_path)
+        if problem is not None:
+            raise FileNotFoundError(problem)
+        args.model, args.vecnormalize = str(model_path), str(vec_path)
+
+    out_dir = Path(args.output_dir) if args.output_dir else artifacts.default_output_dir()
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    print("Loading PPO model...")
-    model = PPO.load(str(model_path), device="cpu")
-    print(f"model        : {model_path}")
-    print(f"vecnormalize : {vec_path}")
+    if not pid_only:
+        print("Loading PPO model...")
+        model = PPO.load(str(model_path), device="cpu")
+        print(f"model        : {model_path}")
+        print(f"vecnormalize : {vec_path}")
     print(f"output dir   : {out_dir}")
 
     all_summaries: List[Dict[str, Any]] = []
@@ -682,7 +731,7 @@ def main() -> None:
         print_case_header(case_name, args.n_eval, args.seed_start)
 
         per_controller: Dict[str, List[Dict[str, Any]]] = {}
-        controllers = ["PID", "PPO"]
+        controllers = ["PID"] if pid_only else ["PID", "PPO"]
         if case_name == "E_mixed" and not args.skip_random_mixed:
             controllers.append("Random")
 
@@ -691,7 +740,7 @@ def main() -> None:
                 case_name=case_name,
                 controller=controller,
                 model=model,
-                vecnormalize_path=str(vec_path),
+                vecnormalize_path=None if pid_only else str(vec_path),
                 n_eval=args.n_eval,
                 seed_start=args.seed_start,
                 print_timeouts=args.print_timeouts,
@@ -700,13 +749,14 @@ def main() -> None:
             all_episode_rows.extend(episode_rows)
             per_controller[controller] = episode_rows
 
-        paired_rows, pair_summary = build_paired_rows(
-            case_name,
-            per_controller["PID"],
-            per_controller["PPO"],
-        )
-        all_paired_rows.extend(paired_rows)
-        pair_summaries.append(pair_summary)
+        if not pid_only:
+            paired_rows, pair_summary = build_paired_rows(
+                case_name,
+                per_controller["PID"],
+                per_controller["PPO"],
+            )
+            all_paired_rows.extend(paired_rows)
+            pair_summaries.append(pair_summary)
 
     # Add paired-case summary columns to the PID/PPO summary rows so the main
     # summary CSV is immediately useful for a paper table.
@@ -725,7 +775,8 @@ def main() -> None:
 
     write_csv(summary_path, all_summaries)
     write_csv(episodes_path, all_episode_rows)
-    write_csv(paired_path, all_paired_rows)
+    if not pid_only:
+        write_csv(paired_path, all_paired_rows)
     write_config_report(
         config_path,
         args=args,
@@ -738,7 +789,8 @@ def main() -> None:
     print("DONE")
     print(f"summary : {summary_path}")
     print(f"episodes: {episodes_path}")
-    print(f"paired  : {paired_path}")
+    if not pid_only:
+        print(f"paired  : {paired_path}")
     print(f"config  : {config_path}")
     print("=" * 78)
 

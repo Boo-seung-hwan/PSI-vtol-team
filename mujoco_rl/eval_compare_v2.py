@@ -1,3 +1,23 @@
+"""Canonical matched-seed evaluation: PID-only vs random residual vs PPO residual.
+
+Environment : landing_rl.envs.landing_env.LandingEnv
+Config      : make_config() below (the "stage2_eval" config of record; the
+              printed labels say "stage1 env" for historical reasons only)
+Seeds       : seed_start + episode index (default 5000..5199 for 200 episodes)
+
+Run from anywhere (paths do not depend on the working directory):
+
+    python -m mujoco_rl.eval_compare_v2 --policy pid
+    python -m mujoco_rl.eval_compare_v2 --policy ppo --model M.zip --vecnorm V.pkl
+    python -m mujoco_rl.eval_compare_v2                       # pid + random + ppo
+
+PID-only and random evaluation never load a PPO model or VecNormalize file.
+PPO evaluation loads the model AND its matching VecNormalize statistics; the
+default pair of record is documented in MODEL_ARTIFACTS.md.
+"""
+
+import argparse
+
 import numpy as np
 from collections import Counter
 
@@ -18,6 +38,7 @@ if str(_LANDING_RL_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_LANDING_RL_REPO_ROOT))
 
 from landing_rl.envs.landing_env import LandingEnv, LandingConfig
+from landing_rl.evaluation import artifacts
 
 
 def make_config():
@@ -64,16 +85,17 @@ def make_stage1_env():
     return Monitor(LandingEnv(make_config()))
 
 
-def make_eval_env(seed=0):
+def make_eval_env(seed=0, vecnorm_path=None):
+    """``vecnorm_path=None`` gives the bare environment (PID / random, which
+    ignore observations); a path wraps it in the frozen VecNormalize stats
+    that the PPO model being evaluated was trained with."""
     env = DummyVecEnv([make_stage1_env])
 
-    env = VecNormalize.load(
-        "./runs/vecnormalize_v4_stage2_contact.pkl",
-        env,
-    )
+    if vecnorm_path is not None:
+        env = VecNormalize.load(str(vecnorm_path), env)
+        env.training = False
+        env.norm_reward = False
 
-    env.training = False
-    env.norm_reward = False
     env.seed(seed)
 
     return env
@@ -86,8 +108,9 @@ def fmt_vec(x):
     return "[" + ", ".join(f"{v:+.3f}" for v in x) + "]"
 
 
-def run_eval(name, policy_fn, n_eval=200, print_timeouts=False, max_timeout_print=15):
-    env = make_eval_env(seed=5000)
+def run_eval(name, policy_fn, n_eval=200, print_timeouts=False, max_timeout_print=15,
+             vecnorm_path=None, seed_start=5000):
+    env = make_eval_env(seed=seed_start, vecnorm_path=vecnorm_path)
 
     successes = 0
     failures = 0
@@ -102,7 +125,7 @@ def run_eval(name, policy_fn, n_eval=200, print_timeouts=False, max_timeout_prin
     timeout_infos = []
 
     for ep in range(n_eval):
-        env.seed(5000 + ep)
+        env.seed(seed_start + ep)
         obs = env.reset()
 
         done = False
@@ -221,15 +244,50 @@ def run_eval(name, policy_fn, n_eval=200, print_timeouts=False, max_timeout_prin
             print(f"    v_cmd      = {fmt_vec(item['v_cmd'])}")
 
 
-def main():
-    model = PPO.load(
-        "./runs/ppo_landing_residual_v4_stage2_contact_final.zip",
-        device="cpu",
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(
+        description="Matched-seed PID / random-residual / PPO-residual evaluation "
+        "(stage2_eval config of record)."
     )
+    parser.add_argument(
+        "--policy",
+        choices=("all", "pid", "random", "ppo"),
+        default="all",
+        help="Which policy to evaluate. 'pid' and 'random' need no PPO artifacts. "
+        "Default 'all' runs pid, random, ppo in that order.",
+    )
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        help=f"PPO .zip. Default: <artifact dir>/{artifacts.BASELINE_MODEL_NAME}",
+    )
+    parser.add_argument(
+        "--vecnorm",
+        type=str,
+        default=None,
+        help=f"VecNormalize .pkl matching --model. Default: <artifact dir>/{artifacts.BASELINE_VECNORM_NAME}",
+    )
+    parser.add_argument("--n-eval", type=int, default=200, help="episodes per policy (default 200)")
+    parser.add_argument("--seed-start", type=int, default=5000, help="first episode seed (default 5000)")
+    args = parser.parse_args(argv)
 
-    def ppo_policy(obs):
-        action, _ = model.predict(obs, deterministic=True)
-        return action
+    if args.n_eval <= 0:
+        parser.error("--n-eval must be positive")
+
+    args.needs_ppo = args.policy in ("all", "ppo")
+    if args.needs_ppo:
+        model = args.model if args.model is not None else artifacts.default_model_path()
+        vecnorm = args.vecnorm if args.vecnorm is not None else artifacts.default_vecnorm_path()
+        problem = artifacts.missing_artifact_message(model, vecnorm)
+        if problem is not None:
+            parser.error(problem)
+        args.model, args.vecnorm = str(model), str(vecnorm)
+    return args
+
+
+def main(argv=None):
+    args = parse_args(argv)
 
     def pid_only_policy(obs):
         return np.zeros((1, 3), dtype=np.float32)
@@ -239,9 +297,23 @@ def main():
     def random_residual_policy(obs):
         return rng.uniform(-1.0, 1.0, size=(1, 3)).astype(np.float32)
 
-    run_eval("PID only stage1 env", pid_only_policy, n_eval=200, print_timeouts=False)
-    run_eval("Random residual stage1 env", random_residual_policy, n_eval=200, print_timeouts=False)
-    run_eval("PPO residual stage1 env", ppo_policy, n_eval=200, print_timeouts=True)
+    common = dict(n_eval=args.n_eval, seed_start=args.seed_start)
+
+    if args.policy in ("all", "pid"):
+        run_eval("PID only stage1 env", pid_only_policy, print_timeouts=False, **common)
+    if args.policy in ("all", "random"):
+        run_eval("Random residual stage1 env", random_residual_policy, print_timeouts=False, **common)
+    if args.needs_ppo:
+        print(f"model        : {args.model}")
+        print(f"vecnormalize : {args.vecnorm}")
+        model = PPO.load(args.model, device="cpu")
+
+        def ppo_policy(obs):
+            action, _ = model.predict(obs, deterministic=True)
+            return action
+
+        run_eval("PPO residual stage1 env", ppo_policy, print_timeouts=True,
+                 vecnorm_path=args.vecnorm, **common)
 
 
 if __name__ == "__main__":

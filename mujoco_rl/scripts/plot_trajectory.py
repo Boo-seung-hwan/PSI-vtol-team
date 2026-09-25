@@ -1,3 +1,17 @@
+"""DEPRECATED / LEGACY -- DO NOT USE FOR BASELINE EVALUATION.
+
+Not a valid evaluation path for RL Baseline v0.1:
+  * it loads ./runs/ppo_landing_residual, a pre-v3 artifact that is not part of
+    the baseline lineage (and does not exist in the documented artifact set);
+  * it applies NO VecNormalize, so raw observations would be fed to a policy
+    trained on normalized observations;
+  * it uses the bare LandingConfig() defaults, which match no trained
+    distribution.
+No correct historical model/normalization pair can be established for it, so it
+is deprecated rather than repaired. Use mujoco_rl/eval_compare_v2.py or
+mujoco_rl/eval_robustness_paper.py (see BASELINE.md).
+"""
+
 import os
 import sys
 from pathlib import Path
@@ -211,6 +225,11 @@ def save_plot_ppo_action_components(ppo_log):
 
 
 def main():
+    print(
+        "WARNING: plot_trajectory.py is DEPRECATED / LEGACY -- it applies no VecNormalize and "
+        "is not a valid baseline evaluation. See BASELINE.md.",
+        file=sys.stderr,
+    )
     os.makedirs(OUT_DIR, exist_ok=True)
 
     model = PPO.load("./runs/ppo_landing_residual", device="cpu")
