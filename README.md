@@ -2,11 +2,82 @@
 
 PX4 SITL, Gazebo, ROS2 mission control, vision pipeline, and MuJoCo RL workspace for the PSI VTOL project.
 
-Current working branch:
+Branches:
+
+- The PX4 / Gazebo / ROS2 sections below (from section 1 on) were written and are maintained on `orange-fix`.
+- The **RL baseline** (`landing_rl/`, `landing_mujoco/`, `system_id/`, `mujoco_rl/` scripts, `BASELINE.md`) lives on
+  `refactor/landing-rl-architecture`. It is **not on `main`**.
+
+---
+
+## Reinforcement Learning Baseline Quick Start
+
+This section covers only the UGRP precision-landing RL baseline (**RL Baseline v0.1**). Read [`BASELINE.md`](BASELINE.md)
+first: it defines what the baseline is, and what it is *not* (the trained PPO policy was trained on the analytical
+`landing_rl` environment, **not** on the measured MuJoCo vehicle model). Trained model files are not in git; see
+[`MODEL_ARTIFACTS.md`](MODEL_ARTIFACTS.md).
+
+The RL environment is separate from the ROS2 / Jetson runtimes (they pin `numpy==1.26.4`). Use a dedicated virtualenv;
+do not install `requirements.txt` into the ROS2 or Jetson environments.
+
+Run every command from the repository root.
+
+**1. Create the environment** (Python >= 3.10; verified on 3.10.12)
 
 ```bash
-orange-fix
+git checkout refactor/landing-rl-architecture
+python3 -m venv .venv
+source .venv/bin/activate
 ```
+
+**2. Install dependencies** (pinned in `requirements.txt`)
+
+```bash
+pip install -r requirements.txt
+```
+
+**3. Run the unit / regression tests** (`unittest`; `pip install pytest` and `python -m pytest <dir>` also work)
+
+```bash
+python -m unittest discover -s landing_rl/tests -p "test_*.py"                    # ~4 min
+python -m unittest discover -s landing_mujoco/tests -t . -p "test_*.py"           # ~1 min
+python -m unittest discover -s system_id/tests -t . -p "test_*.py"                # seconds
+```
+
+Tests that need the trained model skip with an explicit reason when it is not available
+(set `UGRP_RL_ARTIFACT_DIR`, see `MODEL_ARTIFACTS.md`; `UGRP_RL_REQUIRE_ARTIFACTS=1` turns that skip into a failure).
+
+**4. Environment smoke test** (no model needed, under a second)
+
+```bash
+python -m landing_rl.evaluation.smoke
+```
+
+**5. PID-only evaluation** (no model needed; 200 episodes, seeds 5000-5199, about 1 minute)
+
+```bash
+python -m mujoco_rl.eval_compare_v2 --policy pid
+```
+
+Expected: `Success rate: 190/200 = 95.0%`. The paper-style robustness matrix, PID only:
+
+```bash
+python -m mujoco_rl.eval_robustness_paper --policy pid --output-dir /tmp/robustness_pid
+```
+
+**6. PPO evaluation** (needs the model AND its matching VecNormalize file)
+
+```bash
+export UGRP_RL_ARTIFACT_DIR=/path/to/dir/containing/the/two/files      # or use --model / --vecnorm
+python -m mujoco_rl.eval_compare_v2 --policy ppo
+python -m mujoco_rl.eval_robustness_paper --output-dir /tmp/robustness_ppo
+```
+
+Explicit form: `--model /path/ppo_landing_residual_v4_stage2_contact_final.zip --vecnorm /path/vecnormalize_v4_stage2_contact.pkl`.
+Expected reference results are listed in `BASELINE.md`.
+
+MuJoCo backend (experimental, not the trained baseline): `python -m landing_mujoco.check_parameter_set --parameter-set tarot680b_reference`
+runs; `--parameter-set ugrp_vehicle_measured` fails by design until the propulsion parameters are measured.
 
 ---
 
