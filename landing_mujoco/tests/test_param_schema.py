@@ -32,19 +32,34 @@ class ParamSchemaTest(unittest.TestCase):
     def test_measured_raises_with_expected_missing_fields(self):
         with self.assertRaises(MissingMeasurementError) as ctx:
             load_uav_params(MEASURED_YAML)
+        # This list has shrunk as real data arrived: total_mass_kg
+        # (measured 2026-09-16), cg_body_m and motor_positions_body_m (once
+        # the measurement datum and the exact 45-degree X symmetry were
+        # confirmed, 2026-09-16), then Ixx/Iyy/Izz (bifilar, 2026-09-19).
+        # Everything below is a propulsion / closed-loop-response quantity
+        # that is still genuinely unmeasured -- the config must keep failing
+        # fast rather than have any of these invented to make it load.
         expected = {
-            "total_mass_kg", "cg_body_m", "Ixx", "Iyy", "Izz",
-            "motor_positions_body_m", "max_collective_thrust_n",
+            "max_collective_thrust_n",
             "tau_roll_s", "tau_pitch_s", "tau_thrust_s", "actuator_delay_s",
         }
         self.assertEqual(set(ctx.exception.missing), expected)
+        for resolved in (
+            "total_mass_kg", "cg_body_m", "motor_positions_body_m",
+            "Ixx", "Iyy", "Izz",
+        ):
+            self.assertNotIn(resolved, ctx.exception.missing)
         self.assertEqual(ctx.exception.parameter_set, ParameterSet.MEASURED_VEHICLE)
         self.assertIn("ERROR: measured vehicle model incomplete", str(ctx.exception))
 
     def test_measured_can_be_loaded_unvalidated_for_inspection(self):
         params = load_uav_params(MEASURED_YAML, validate=False)
         self.assertEqual(params.parameter_set, ParameterSet.MEASURED_VEHICLE)
-        self.assertIsNone(params.mass_properties.mass_kg)
+        # Mass and inertia are measured; max collective thrust is the field
+        # that stands in for "still incomplete" in this inspection path.
+        self.assertEqual(params.mass_properties.mass_kg, 6.408)
+        self.assertEqual(params.mass_properties.ixx, 0.153184)
+        self.assertIsNone(params.thrust.max_collective_thrust_n)
 
     def test_unity_gain_default_when_k_missing(self):
         params = load_uav_params(MEASURED_YAML, validate=False)

@@ -1,10 +1,18 @@
-# MEASURED_VEHICLE configuration -- the future research configuration.
+# MEASURED_VEHICLE configuration -- the real research configuration.
 #
-# All research-critical fields are `null` until the real UGRP UAV is
-# measured / system-identified. Loading this file (landing_mujoco.configs
-# .param_schema.load_uav_params) will raise MissingMeasurementError and list
-# exactly which measurements are still missing -- this is intentional
-# fail-fast behavior, not a bug.
+# Research-critical fields that are still unmeasured remain `null`. Loading
+# this file (landing_mujoco.configs.param_schema.load_uav_params) will raise
+# MissingMeasurementError and list exactly which measurements are still
+# missing -- this is intentional fail-fast behavior, not a bug. As of
+# 2026-09-19 the rigid-body inertial properties (mass, CG, Ixx/Iyy/Izz) and
+# the motor/battery geometry are populated; the remaining blockers are the
+# propulsion / closed-loop response fields: max collective thrust, tau_roll_s,
+# tau_pitch_s, tau_thrust_s and actuator_delay_s (identified_response.delay_s).
+# The vertical CG-to-ground distance is known (geometry.ground_clearance_m =
+# 0.241 m) and the skid-type landing gear is recorded as four PHYSICAL contact
+# points DERIVED from the measured skid length / spacing under a centred-
+# symmetry ASSUMPTION (see the landing-gear note below). "Physical inertia
+# injected; propulsion calibration pending."
 #
 # Do NOT fill any field here with a Tarot TL680B manufacturer reference
 # value, an internet spec, or a value copied from
@@ -13,67 +21,575 @@
 #
 # inertia_estimation_mode is "manual" (not "auto") here on purpose: this
 # config must never fall back to the geometric provisional-inertia
-# approximation -- Ixx/Iyy/Izz must be entered directly once measured.
+# approximation -- Ixx/Iyy/Izz are entered directly (bifilar measurement,
+# 2026-09-19) and must never be regenerated from geometry.
+#
+# ---------------------------------------------------------------------------
+# PROVENANCE VOCABULARY (2026-09-16)
+# ---------------------------------------------------------------------------
+# Every populated value below carries a `source` tag from this set:
+#
+#   MEASURED             physically measured on the assembled UGRP vehicle
+#   USER_PROVIDED_SPEC   component model designation / nameplate figure
+#                        supplied by the user; NOT read from a datasheet held
+#                        in this repository and NOT independently verified
+#   USER_REPORTED_       a reported observation of how the vehicle is built
+#     OBSERVATION        (e.g. the motor spin layout) -- weaker than MEASURED:
+#                        no instrument reading, no independent cross-check
+#   USER_CONFIRMED       a geometric/frame property the user explicitly
+#                        confirmed (e.g. exact 45-degree X symmetry, the
+#                        measurement datum), enabling a DERIVED value that
+#                        was previously blocked
+#   DERIVED              computed from other values in this file, under a
+#                        stated and now-confirmed basis; never a measurement
+#   ASSUMED_ZERO_FOR_V0  a modelling assumption adopted so the v0 rigid body can
+#                        be built (the off-diagonal products of inertia);
+#                        explicitly NOT a measurement of zero
+#   DERIVED_FROM_         computed from user-confirmed measured DIMENSIONS
+#     MEASURED_DIMENSIONS (e.g. skid length / spacing) -- the derived
+#                        coordinates are NOT themselves measured coordinates;
+#                        always paired with the assumption that licensed the
+#                        derivation
+#   CENTERED_SYMMETRY_   a modelling assumption: a footprint is centred and
+#     ASSUMPTION         symmetric about the CG in x and y. NOT a measured
+#                        per-leg offset relative to the CG
+#   NOT_MEASURED /
+#   NOT_IDENTIFIED /
+#   NOT_VERIFIED         no evidence exists yet (field stays null)
+#
+# ---------------------------------------------------------------------------
+# MEASUREMENT DATUM -> BODY FRAME (RESOLVED 2026-09-16)
+# ---------------------------------------------------------------------------
+# Raw datum (USER_CONFIRMED): heights measured from the FLOOR, +Z UP.
+# Body frame: FRD -- +X forward, +Y right, +Z DOWN -- origin AT THE CG.
+#
+# The two differ by an origin shift to the CG and a Z sign flip, so:
+#
+#     z_body_FRD = cg_raw_z - raw_z
+#
+# Applied to the 2026-09-16 measurements:
+#
+#     motor plane : 0.241 - 0.334 = -0.093 m   (motors ABOVE the CG)
+#     battery     : 0.241 - 0.220 = +0.021 m   (battery BELOW the CG)
+#     CG itself   : 0.241 - 0.241 =  0.000 m   (origin, by definition)
+#
+# The raw numbers are preserved verbatim in `raw_measurements:` below for
+# provenance; the converted values are the canonical body-frame fields. A
+# test recomputes each conversion from the raw pair rather than trusting the
+# literals, so the two can never drift.
+#
+# ---------------------------------------------------------------------------
+# LANDED-POSE GROUND PLANE (USER_CONFIRMED 2026-09-19)
+# ---------------------------------------------------------------------------
+# The raw heights were measured with the vehicle in its NORMAL LANDED POSE,
+# landing gear resting on the ground, so the datum "floor" IS the ground
+# plane (ground = 0, height measured upward). In the FRD CG-origin frame:
+#
+#     CG            : [0, 0, 0]        (origin)
+#     ground plane  : z = +0.241 m     (0.241 - 0.000; BELOW the CG)
+#
+# "CG body z = +0.241" would be WRONG: 0.241 m is the CG's raw HEIGHT ABOVE
+# THE GROUND; in the body frame the CG is the origin and the GROUND is at
+# +0.241 m.
+#
+# geometry.ground_clearance_m = 0.241 records exactly that, and it is a
+# PHYSICAL parameter of the vehicle: the vertical CG-to-ground distance in the
+# landed pose. It is NOT a simulation-geometry offset. The MuJoCo landing-gear
+# feet are spheres of radius LEG_CONTACT_RADIUS_M = 0.020 m (a SIMULATION
+# representation owned by mjcf_builder.py, deliberately not stored here); with
+# landing_gear_points_semantics: physical_contact the builder derives the
+# sphere CENTRE one radius above the physical contact point:
+#
+#     sphere centre z (body, FRD) = ground_clearance_m - radius
+#                                 = 0.241 - 0.020 = 0.221 m   (DERIVED, never stored)
+#
+# so that, landed, CG world z = 0.241, sphere centre world z = 0.020, and the
+# sphere bottom is at world z = 0. 0.221 must NEVER be entered as
+# ground_clearance_m or as a physical contact point.
+#
+# ---------------------------------------------------------------------------
+# LANDING GEAR: helicopter-style skids (2026-09-19)
+# ---------------------------------------------------------------------------
+# PHYSICAL gear: two continuous, parallel skid bars. Their long direction is
+# parallel to the vehicle roll axis == body +X. Confirmed dimensions:
+#
+#     skid effective length          0.300 m   (USER_CONFIRMED)
+#     skid centre-line spacing       0.310 m   (USER_CONFIRMED)
+#     CG -> ground (landed pose)     0.241 m   (MEASURED; geometry.ground_clearance_m)
+#
+# MuJoCo v0 APPROXIMATION: four representative contact points at the skid
+# ENDPOINTS -- NOT a continuous line contact. FRD body frame, +Y right (so the
+# left skid is y = -0.155). The points are DERIVED from the dimensions above
+# under a CENTERED_SYMMETRY_ASSUMPTION (footprint centred on the CG in x and y):
+#
+#     x = +/- 0.300 / 2 = +/- 0.150 m        (half skid length)
+#     y = +/- 0.310 / 2 = +/- 0.155 m        (half skid spacing)
+#     z = ground_clearance_m = +0.241 m      (PHYSICAL contact plane)
+#
+# The four coordinates as a set are therefore NOT "fully measured point
+# coordinates": length, spacing, clearance and the skid direction are known;
+# the centring on the CG (the actual per-leg offset from the CG) is an
+# assumption. Provenance: DERIVED_FROM_MEASURED_DIMENSIONS +
+# CENTERED_SYMMETRY_ASSUMPTION.
+#
+# These are PHYSICAL contact points (landing_gear_points_semantics:
+# physical_contact), not MuJoCo sphere centres. The builder derives each sphere
+# centre one radius above the contact point (0.241 - 0.020 = 0.221 m, DERIVED,
+# never stored here).
+#
+# STILL NOT determined (remain null):
+#   geometry.frame_height_m             0.334 is a motor height, NOT a frame
+#                                       bounding dimension
 
 parameter_set: MEASURED_VEHICLE
-vehicle_name: "UGRP precision-landing UAV (measured configuration -- pending measurement)"
+vehicle_name: "UGRP precision-landing UAV (measured configuration -- mass/geometry 2026-09-16, inertia 2026-09-19; propulsion pending)"
 
 mass_properties:
-  mass_kg: null
-  cg_body_m: null
+  # Total assembled all-up mass, 6408 g, measured 2026-09-16.
+  mass_kg: 6.408
+  # The body-frame origin IS the CG (MUJOCO_MODEL.md section C), so this is
+  # [0, 0, 0] by construction. It is now written explicitly -- as of the
+  # 2026-09-16 datum resolution this is a reconciled statement, not an
+  # unexamined default: the measured CG sits at raw-datum z = 0.241 m and
+  # that point is what the body origin is defined to be.
+  cg_body_m: [0.0, 0.0, 0.0]
+  # Principal-axis (diagonal) body inertia about the CG, in the FRD body
+  # frame. MEASURED by bifilar suspension on the full flight configuration
+  # (see meta.inertia_kgm2 below for the reduction and per-axis statistics).
+  # Because the tensor is diagonal it is numerically identical in the MuJoCo
+  # FLU body frame (diag(1,-1,-1) conjugation leaves diagonal terms fixed).
   inertia_kgm2:
-    ixx: null
-    iyy: null
-    izz: null
+    ixx: 0.153184
+    iyy: 0.126285
+    izz: 0.149050
+  # Off-diagonal products of inertia (Ixy, Ixz, Iyz) are NOT measured. The
+  # schema stores diagonal terms only and MuJoCo receives `diaginertia`; the
+  # zero assumption is recorded in meta.inertia_products_kgm2 as
+  # ASSUMED_ZERO_FOR_V0 and must never be recorded as MEASURED = 0.
   inertia_estimation_mode: manual
   meta:
-    mass_kg: {source: NOT_MEASURED, confidence: null, replace_before_real_training: false}
-    cg_body_m: {source: NOT_MEASURED, confidence: null, replace_before_real_training: false}
-    inertia_kgm2: {source: NOT_MEASURED, confidence: null, replace_before_real_training: false}
+    mass_kg:
+      source: MEASURED
+      date: 2026-09-16
+      confidence: high
+      replace_before_real_training: false
+      note: >-
+        6408 g total all-up mass. USER_CONFIRMED 2026-09-19: this is the
+        FULL ACTUAL FLIGHT CONFIGURATION -- battery, ~1.8 kg ballast brick,
+        motors, ESCs, frame, electronics, landing gear, wiring and other
+        installed hardware are ALL already inside this figure. It is applied
+        ONCE, to the single MuJoCo root rigid body (see
+        included_hardware below): no component mass is added on top of it.
+    included_hardware:
+      # Provenance / plausibility only. NOTHING under this key is read by the
+      # schema loader, the MJCF builder or any dynamics code, and none of it
+      # adds mass or inertia to MuJoCo -- mass_kg and inertia_kgm2 already
+      # include all of it (measured on the assembled vehicle). Adding these
+      # to the MJCF would double-count.
+      source: USER_PROVIDED_APPROXIMATE
+      date: 2026-09-19
+      contributes_mass_to_mujoco: false
+      contributes_inertia_to_mujoco: false
+      ballast_brick:
+        mass_kg_approx: 1.8
+        # As reported; whether x/y/z are body axes is not stated.
+        dimensions_xyz_m_approx: [0.09, 0.21, 0.06]
+        center_below_cg_m_approx: 0.08
+      battery:
+        # Same physical datum as battery.position_body_m (+0.021 m below CG).
+        center_below_cg_m: 0.021
+        note: >-
+          battery.mass_kg stays null (pack mass not measured); its mass is
+          inside mass_kg above, never added separately.
+    inertia_products_kgm2:
+      source: ASSUMED_ZERO_FOR_V0
+      date: 2026-09-19
+      ixy: 0.0
+      ixz: 0.0
+      iyz: 0.0
+      applied_by_mujoco: false
+      note: >-
+        NOT MEASURED. Zero is a v0 modelling assumption (near-symmetric
+        vehicle), NOT a measurement of zero. MuJoCo receives `diaginertia`
+        only, so these are documentation, not inputs. FRAME TRAP for any
+        future use: FRD -> MuJoCo FLU is R = diag(1,-1,-1); the diagonal terms
+        are invariant under R I R^T but Ixy -> -Ixy, Ixz -> -Ixz, Iyz -> +Iyz.
+        Do not pass a non-zero product into MuJoCo without that conversion.
+    cg_body_m:
+      source: DERIVED
+      date: 2026-09-16
+      confidence: high
+      derived_from: raw_measurements.cg_raw_m + body-origin-at-CG convention
+      replace_before_real_training: false
+      note: >-
+        [0, 0, 0] by definition of the body frame. The underlying CG
+        measurement (raw-datum z = 0.241 m) is preserved in raw_measurements.
+    inertia_kgm2:
+      source: MEASURED
+      # Recording date. The bifilar session date itself was not stated.
+      date: 2026-09-19
+      # medium, not high: manual-stopwatch periods, n = 9-10 per axis, no
+      # damped-sinusoid fit (R^2 N/A), single suspension configuration.
+      confidence: medium
+      replace_before_real_training: false
+      method: bifilar_suspension
+      period_timing: manual_stopwatch
+      mass_used_kg: 6.408
+      # Reduction (reproduced, not merely quoted): with the raw 3-cycle total
+      # times below, per-trial I = m*g*D^2*T^2 / (16*pi^2*L) with T = total/3,
+      # then the mean/std over trials, reproduces every value in this block
+      # to the recorded precision.
+      formula: "I = m * g * D^2 * T^2 / (16 * pi^2 * L)"
+      # NOT stated by the user. INFERRED: g = 9.8065 (LandingConfig.gravity_mps2)
+      # reproduces all six reported means/stds; the MuJoCo constant 9.80665
+      # moves Ixx by +3e-6 (0.153187). The canonical values are the user's
+      # literals in mass_properties.inertia_kgm2 -- they are NOT recomputed.
+      g_used_mps2_inferred: 9.8065
+      # Mean of the per-trial I values, NOT I evaluated at the mean period
+      # (that would give 0.153156 / 0.126268 / 0.149046).
+      reduction: mean_of_per_trial_inertia
+      # There is no R^2: a manual stopwatch period is not a damped-sinusoid
+      # regression. Do NOT fabricate one. Only a future HELIX angle-time fit,
+      #   theta(t) = A exp(-lambda t) cos(omega_d t + phi) + theta_0
+      # can legitimately add fit R^2.
+      r2: "N/A"
+      r2_note: >-
+        Manual stopwatch period measurement; no angle-time trajectory was
+        fitted. To be added only if a HELIX theta(t) fit is performed.
+      # Uncertainty is RECORDED now and deliberately NOT wired into any domain
+      # randomization or noise model in this change.
+      uncertainty_use: RECORDED_ONLY_NOT_WIRED_INTO_RANDOMIZATION
+      axes:
+        ixx:
+          axis: roll
+          bifilar_D_m: 0.090
+          bifilar_L_m: 0.427
+          cycles_per_timing: 3
+          total_times_s: [13.78, 13.68, 13.64, 13.26, 13.38, 13.60, 13.45, 13.66, 13.49, 13.19]
+          T_mean_s: 4.50433
+          n: 10
+          mean_kgm2: 0.153184
+          sample_std_kgm2: 0.004362
+          sample_variance_kgm2_sq: 1.903e-5
+          outlier_policy: none
+        iyy:
+          axis: pitch
+          bifilar_D_m: 0.185
+          bifilar_L_m: 0.424
+          cycles_per_timing: 3
+          total_times_s: [6.01, 6.02, 5.93, 6.00, 6.04, 5.90, 5.95, 5.95, 5.83, 5.85]
+          T_mean_s: 1.98267
+          n: 10
+          mean_kgm2: 0.126285
+          sample_std_kgm2: 0.003041
+          sample_variance_kgm2_sq: 9.246e-6
+          outlier_policy: none
+        izz:
+          axis: yaw
+          bifilar_D_m: 0.163
+          bifilar_L_m: 0.505
+          cycles_per_timing: 3
+          # n = 9: the 8.48 s trial is excluded (see excluded_total_times_s).
+          total_times_s: [8.05, 7.99, 8.00, 7.95, 8.08, 8.02, 8.03, 7.94, 7.98]
+          excluded_total_times_s: [8.48]
+          T_mean_s: 2.66815
+          n: 9
+          mean_kgm2: 0.149050
+          sample_std_kgm2: 0.001698
+          sample_variance_kgm2_sq: 2.884e-6
+          outlier_policy: >-
+            8.48 s judged an outlier candidate by the user and EXCLUDED from
+            the canonical estimate (canonical Izz is the outlier-excluded
+            value). The trial is preserved above, not deleted.
+          with_excluded_trial_included:
+            n: 10
+            mean_kgm2: 0.150874
+            sample_std_kgm2: 0.005984
+      observations:
+        # Recorded, not acted on. Ixx exceeds Iyy by ~21% on a nominally
+        # symmetric X-frame. The ~1.8 kg ballast brick (0.09 x 0.21 x 0.06 m,
+        # long in y if those are body axes) points the same way, but this is
+        # NOT a demonstrated explanation, and the values are NOT adjusted
+        # toward symmetry.
+        ixx_over_iyy: 1.213
+        rigid_body_triangle_inequalities: satisfied
 
 geometry:
+  # DELIBERATELY NULL even though it is now derivable. "Wheelbase" is an
+  # ambiguous name in this repository (x500_shell.py reads it as the
+  # opposite-motor span; MUJOCO_MODEL.md section D miscalls the x/y component
+  # `a` the "radial distance"). With positions_body_m populated,
+  # x500_shell._target_wheelbase_from_physical_params already derives the
+  # 0.720 m opposite-motor span from max pairwise distance -- adding a
+  # literal here would only create a second source that can disagree with it.
   wheelbase_m: null
-  arm_length_m: null
+  # MEASURED: radial distance from the vehicle center to each motor center.
+  # NOTE the semantics: this is center->motor, NOT the opposite-motor
+  # diagonal. (tarot680b_reference.yaml derives its arm_length_m as
+  # wheelbase/2, which is the same quantity, reached differently.)
+  arm_length_m: 0.360
+  # USER_CONFIRMED 2026-09-16: the frame is an exact symmetric 45-degree
+  # X-frame. This is what unblocked the motor XY derivation below -- it was
+  # explicitly NOT confirmed before that date.
+  arm_angle_deg: 45.0
   frame_footprint_m: null
+  # NOT the motor-plane height. raw_measurements.motor_plane_raw_z_m
+  # (0.334 m) is a datum-referenced motor height, not a frame bounding
+  # dimension -- do not copy it here.
   frame_height_m: null
-  ground_clearance_m: null
-  landing_gear_points_body_m: null
+  # PHYSICAL: vertical distance from the CG (body origin) down to the ground /
+  # contact plane in the normal landed pose == the ground plane's body-frame z
+  # (FRD, +z down) == the raw CG height above the ground. NOT the MuJoCo
+  # contact-sphere centre (that is 0.241 - 0.020 = 0.221, derived by the MJCF
+  # builder and never stored).
+  ground_clearance_m: 0.241
+  # PHYSICAL contact points of the skid-type gear, FRD body frame relative to
+  # the CG [m]. Two parallel skid bars along body X, approximated in v0 by four
+  # representative points at the skid ENDPOINTS. DERIVED from the confirmed skid
+  # length 0.300 m and centre-line spacing 0.310 m under a
+  # CENTERED_SYMMETRY_ASSUMPTION (x = +/-0.150, y = +/-0.155, z =
+  # ground_clearance_m) -- NOT four measured coordinates. They are contact
+  # points, never MuJoCo sphere centres (0.221 is derived by the builder and
+  # must NOT be entered here). Order: left-front, left-rear, right-front,
+  # right-rear (FRD +Y = right, so left is negative y); the MJCF geoms are
+  # leg_0 .. leg_3 in this order.
+  landing_gear_points_body_m:
+    - [ 0.150, -0.155, 0.241]   # left-front
+    - [-0.150, -0.155, 0.241]   # left-rear
+    - [ 0.150,  0.155, 0.241]   # right-front
+    - [-0.150,  0.155, 0.241]   # right-rear
+  # How landing_gear_points_body_m is read. "physical_contact": the points are
+  # where the real gear touches the ground, and mjcf_builder derives each
+  # sphere centre = point - LEG_CONTACT_RADIUS_M along body z. Declared here
+  # explicitly so a future measured point set cannot silently inherit the
+  # legacy "geom_center" reading (points ARE the sphere centres) that
+  # tarot680b_reference.yaml relies on.
+  landing_gear_points_semantics: physical_contact
   meta:
-    ground_clearance_m: {source: NOT_MEASURED}
-    landing_gear_points_body_m: {source: NOT_MEASURED}
+    arm_length_m:
+      source: MEASURED
+      date: 2026-09-16
+      confidence: high
+      note: center-to-motor-center radial distance, 36 cm.
+    arm_angle_deg:
+      source: USER_CONFIRMED
+      date: 2026-09-16
+      confidence: high
+      note: >-
+        Exact symmetric 45-degree X-frame, confirmed by the user. Basis for
+        motors.positions_body_m; a test recomputes those from
+        arm_length_m + this angle.
+    wheelbase_m:
+      source: NOT_MEASURED
+      note: >-
+        Derivable (2 * arm_length_m = 0.720 m) but deliberately not stored --
+        see the comment above. A test asserts the max-pairwise derivation
+        from positions_body_m equals 0.720 m.
+    frame_footprint_m: {source: NOT_MEASURED}
+    frame_height_m: {source: NOT_MEASURED}
+    ground_clearance_m:
+      source: MEASURED
+      date: 2026-09-19
+      confidence: high
+      derived_from: raw_measurements.cg_raw_m[2] (numerically equal)
+      replace_before_real_training: false
+      note: >-
+        PHYSICAL parameter: vertical CG-to-ground distance in the normal
+        landed pose (landing gear on the ground) = 0.241 m = the raw CG height
+        above the ground; the ground plane sits at body z = +0.241 m (FRD).
+        Landed-pose datum USER_CONFIRMED 2026-09-19. This replaces the earlier
+        "not stated" note: the vehicle WAS resting on its own landing gear.
+        NOT a simulation offset -- the contact-sphere centre is
+        ground_clearance_m - LEG_CONTACT_RADIUS_M (0.020) = 0.221 m, derived by
+        mjcf_builder.py and never stored. It is the fallback touchdown
+        reference in landing_reference_point_body_m() ([0, 0, 0.241], x/y
+        ASSUMED centred). It creates no contact geometry by itself.
+    landing_gear_points_body_m:
+      source: DERIVED_FROM_MEASURED_DIMENSIONS
+      assumptions: [CENTERED_SYMMETRY_ASSUMPTION]
+      date: 2026-09-19
+      confidence: medium
+      derived_from: skid_geometry (below) + geometry.ground_clearance_m
+      replace_before_real_training: false
+      note: >-
+        NOT four measured point coordinates. Known: skid length, skid
+        centre-line spacing, ground clearance and the skid direction (body X).
+        Derived from those: x = +/- length/2, y = +/- spacing/2, z =
+        ground_clearance_m. ASSUMED: the footprint is centred and symmetric
+        about the CG (the exact per-leg offset from the CG was not measured).
+        v0 approximates two continuous skid bars by four endpoint points -- a
+        deliberate simplification, not a line-contact model.
+      skid_geometry:
+        physical_gear: two continuous parallel skid bars (helicopter-style)
+        v0_approximation: four representative contact points at the skid endpoints
+        skid_long_axis: body_x (vehicle roll axis)
+        point_order: [left-front, left-rear, right-front, right-rear]
+        skid_effective_length_m:
+          value: 0.300
+          source: USER_CONFIRMED
+        skid_centerline_spacing_m:
+          value: 0.310
+          source: USER_CONFIRMED
+        half_length_m:
+          value: 0.150
+          source: DERIVED
+          derived_from: skid_effective_length_m / 2
+        half_spacing_m:
+          value: 0.155
+          source: DERIVED
+          derived_from: skid_centerline_spacing_m / 2
+        centering:
+          source: CENTERED_SYMMETRY_ASSUMPTION
+          note: >-
+            Footprint assumed centred and symmetric about the CG in x and y.
+            This is a v0 geometric assumption, not a measured per-leg offset.
+    landing_gear_points_semantics:
+      source: USER_CONFIRMED
+      date: 2026-09-19
+      note: >-
+        Modelling decision (user, 2026-09-19): physical contact geometry and
+        its simulation representation are separate. Points are PHYSICAL
+        contact points; the sphere centre is derived by the builder.
 
 motors:
-  positions_body_m: null
-  spin_directions: null
+  # DERIVED, and now unblocked on both axes:
+  #   XY -- a = arm_length_m / sqrt(2) = 0.2545584412271571 m, from the
+  #         USER_CONFIRMED exact 45-degree symmetric X-frame.
+  #   Z  -- -0.093 m, from the RESOLVED measurement datum
+  #         (0.241 - 0.334; motors sit ABOVE the CG, and +Z is DOWN in FRD).
+  # FRD convention: +x forward, +y right, so LEFT is -y.
+  positions_body_m:
+    FL: [0.2545584412271571, -0.2545584412271571, -0.093]
+    FR: [0.2545584412271571, 0.2545584412271571, -0.093]
+    RL: [-0.2545584412271571, -0.2545584412271571, -0.093]
+    RR: [-0.2545584412271571, 0.2545584412271571, -0.093]
+  # Observed on the assembled vehicle (2026-09-16): X-frame quadrotor,
+  # diagonally-opposed motors share a rotation direction.
+  # Keys are physical positions: F/R = front/rear, L/R = left/right, and the
+  # SAME keys are used by positions_body_m above (the two dicts must join).
+  #
+  # Correspondence to the M1..M4 numbering in MUJOCO_MODEL.md section D
+  # (FRD: +x forward, +y right):
+  #     M1 = [+a, +a] = FR      M2 = [-a, +a] = RR
+  #     M3 = [-a, -a] = RL      M4 = [+a, -a] = FL
+  # so this vehicle is M1 CCW, M2 CW, M3 CCW, M4 CW -- the INVERSE polarity
+  # of the assumption in tarot680b_reference.yaml (M1 CW, M2 CCW, ...),
+  # though both preserve "diagonals match". Spin direction is not consumed
+  # by any dynamics code today (MUJOCO_MODEL.md section E), so this is a
+  # provenance record, not a behavior change.
+  spin_directions:
+    FL: CW
+    FR: CCW
+    RL: CCW
+    RR: CW
   mass_kg_each: null
-  model: null
-  kv_rpm_per_v: null
+  model: "T-MOTOR MN501-S IP45"
+  kv_rpm_per_v: 360
   meta:
-    positions_body_m: {source: NOT_MEASURED}
-    spin_directions: {source: NOT_VERIFIED}
+    positions_body_m:
+      source: DERIVED
+      date: 2026-09-16
+      confidence: high
+      derived_from: >-
+        geometry.arm_length_m + geometry.arm_angle_deg (XY);
+        raw_measurements datum conversion (Z)
+      replace_before_real_training: false
+      note: >-
+        Superseded the 2026-09-16 provisional XY estimate, which was blocked
+        on an unconfirmed arm angle and an undefined datum. Both are now
+        resolved. Tests recompute XY from arm_length_m/arm_angle_deg and Z
+        from the raw pair, so no literal here is trusted on its own.
+    spin_directions:
+      # Deliberately NOT tagged MEASURED: this is a reported observation of
+      # how the vehicle is built/wired, not an instrument reading, and it has
+      # not been checked against the PX4 airframe/motor mapping or a bench
+      # spin test. The schema's original tag here was NOT_VERIFIED.
+      source: USER_REPORTED_OBSERVATION
+      date: 2026-09-16
+      confidence: medium
+      replace_before_real_training: false
+      note: >-
+        Observed layout; FL/RR = CW, FR/RL = CCW. Verify against the PX4
+        actuator/motor assignment before any rotor-level model consumes it.
+    model:
+      source: USER_PROVIDED_SPEC
+      date: 2026-09-16
+    kv_rpm_per_v:
+      source: USER_PROVIDED_SPEC
+      date: 2026-09-16
+      note: >-
+        From the "KV360" model designation. No T-MOTOR datasheet is held in
+        this repository; max thrust, motor mass, Kt/Kv electrical
+        coefficients and the motor time constant remain UNKNOWN.
+    mass_kg_each: {source: NOT_MEASURED}
 
 propellers:
-  model: null
+  model: "T-MOTOR MS1704"
+  # Model-string only. No MS1704 datasheet exists in this repository and the
+  # designation has NOT been decoded into a diameter/pitch here -- doing so
+  # would be an invented number.
   diameter_m: null
   pitch_m: null
   blade_count: null
+  meta:
+    model: {source: USER_PROVIDED_SPEC, date: 2026-09-16}
+    diameter_m: {source: NOT_MEASURED}
+    pitch_m: {source: NOT_MEASURED}
+    blade_count: {source: NOT_MEASURED}
 
 battery:
-  model: null
-  nominal_voltage_v: null
+  model: "Poly-Tronics 8th Generation 10000mAh 22.2V 6S1P 75C+ XT90-S"
+  nominal_voltage_v: 22.2
   mass_kg: null
-  position_body_m: null
+  # DERIVED from the RESOLVED datum: 0.241 - 0.220 = +0.021 m. Positive in
+  # FRD means BELOW the CG (+Z is down). X/Y are on the vehicle centerline as
+  # measured.
+  position_body_m: [0.0, 0.0, 0.021]
+  meta:
+    model: {source: USER_PROVIDED_SPEC, date: 2026-09-16}
+    nominal_voltage_v:
+      source: USER_PROVIDED_SPEC
+      date: 2026-09-16
+      note: >-
+        6S1P nominal, 10000 mAh, 75C+ discharge rating, XT90-S connector.
+        Measured pack mass and measured resting/loaded voltage are UNKNOWN.
+    mass_kg: {source: NOT_MEASURED}
+    position_body_m:
+      source: DERIVED
+      date: 2026-09-16
+      confidence: high
+      derived_from: raw_measurements (battery_center_raw_m, cg_raw_m)
+      note: >-
+        +0.021 m => the battery centroid sits 21 mm BELOW the CG in FRD.
+        Battery MASS is still unknown, so this position cannot yet contribute
+        to an inertia estimate.
 
 esc:
-  model: null
+  model: "HOBBYWING Skywalker V2 60A"
   protocol: null
-  max_current_a: null
+  max_current_a: 60
+  meta:
+    model: {source: USER_PROVIDED_SPEC, date: 2026-09-16}
+    max_current_a:
+      source: USER_PROVIDED_SPEC
+      date: 2026-09-16
+      note: >-
+        60 A continuous per the model designation; 3-6S input range, 7 A BEC
+        built in. ESC command/response delay is NOT identified.
+    protocol: {source: NOT_VERIFIED}
 
 thrust:
+  # UNKNOWN. The motor+propeller combination (MN501-S KV360 + MS1704) has not
+  # been bench-tested. Do NOT back-fill from a thrust-to-weight assumption.
+  # For what IS safely derivable from mass alone, see the hover-thrust note
+  # at the bottom of this file.
   max_collective_thrust_n: null
   thrust_to_weight_max: null
   meta:
-    max_collective_thrust_n: {source: NOT_MEASURED}
+    max_collective_thrust_n:
+      source: NOT_MEASURED
+      note: propulsion bench test pending; thrust/torque coefficients UNKNOWN.
+    thrust_to_weight_max: {source: NOT_MEASURED}
 
 identified_response:
   tau_roll_s: null
@@ -95,3 +611,73 @@ identified_response:
     K_pitch: {source: NOT_IDENTIFIED}
     K_thrust: {source: NOT_IDENTIFIED}
     K_yaw: {source: NOT_IDENTIFIED}
+
+# ---------------------------------------------------------------------------
+# raw_measurements: AS-MEASURED NUMBERS, PRESERVED VERBATIM
+# ---------------------------------------------------------------------------
+# These are NOT body-frame coordinates and are consumed by no dynamics code.
+# They are kept after the 2026-09-16 datum resolution so the provenance chain
+# stays auditable: every converted body-frame z above can be recomputed from
+# this block, and tests do exactly that rather than trusting the converted
+# literals.
+raw_measurements:
+  datum_status: RESOLVED
+  datum_origin: floor
+  datum_up_axis: "+z_up"
+  datum_resolved_date: 2026-09-16
+  datum_note: >-
+    USER_CONFIRMED 2026-09-16: all z values in this block are heights
+    measured from the FLOOR with +Z pointing UP. The simulation body frame is
+    FRD (+X forward, +Y right, +Z DOWN) with its origin at the CG, so the
+    conversion is an origin shift to the CG plus a Z sign flip:
+    z_body_FRD = cg_raw_z - raw_z. Before this date the datum was undefined
+    and only unsigned separations were recorded. USER_CONFIRMED 2026-09-19:
+    the vehicle was in its normal landed pose, landing gear on the ground, so
+    the "floor" is the ground plane (ground = 0); it converts to body z =
+    0.241 - 0 = +0.241 m (see geometry.ground_clearance_m).
+  # [0, 0, 0.241] m -- CG height above the floor (= above the ground, landed).
+  cg_raw_m: [0.0, 0.0, 0.241]
+  # 0.334 m -- motor-center height above the floor.
+  motor_plane_raw_z_m: 0.334
+  # [0, 0, 0.220] m -- battery-center height above the floor.
+  battery_center_raw_m: [0.0, 0.0, 0.220]
+  # 0.360 m -- horizontal, datum-independent (duplicated from
+  # geometry.arm_length_m for locality; a test asserts they agree).
+  motor_radial_distance_m: 0.360
+  meta:
+    source: MEASURED
+    date: 2026-09-16
+    confidence: high
+    # Recorded as unsigned separations while the datum was undefined; the
+    # signs below were fixed by the 2026-09-16 datum resolution. Kept under
+    # the original magnitudes so the history stays legible.
+    resolved_separations:
+      # |0.334 - 0.241| = 0.093 m; motors are ABOVE the CG
+      #   => body z = -0.093 m (FRD, +Z down).
+      motor_plane_to_cg_abs_m: 0.093
+      motor_plane_body_z_m: -0.093
+      # |0.241 - 0.220| = 0.021 m; battery is BELOW the CG
+      #   => body z = +0.021 m (FRD, +Z down).
+      cg_to_battery_abs_m: 0.021
+      battery_body_z_m: 0.021
+
+# ---------------------------------------------------------------------------
+# Hover thrust is NOT stored as a literal anywhere in this file. It is a pure
+# function of mass and the caller's gravity constant -- use
+# UAVPhysicalParams.hover_thrust_n(g). Storing a scalar would silently go
+# stale if mass is re-measured, and would hide which g produced it.
+#
+# For reference (DERIVED, and an EQUAL-SHARING assumption for the per-motor
+# figure -- the real vehicle's CG offset means the four motors do not share
+# hover thrust exactly):
+#   g = 9.8065   (landing_rl.envs.landing_env.LandingConfig.gravity_mps2)
+#     total  = 6.408 * 9.8065   = 62.8401 N
+#     /motor = 15.7100 N = 1.6020 kgf
+#   g = 9.80665 (hardcoded in landing_mujoco actuation_model / MJCF)
+#     total  = 6.408 * 9.80665  = 62.8410 N
+#     /motor = 15.7103 N = 1.6020 kgf   (corrected 2026-09-19: previously
+#                                        recorded as 15.7102 N / 1.6021 kgf)
+# The two gravity constants differing is a PRE-EXISTING repository
+# discrepancy, recorded here but deliberately NOT reconciled (that would
+# be a behavior change).
+# ---------------------------------------------------------------------------

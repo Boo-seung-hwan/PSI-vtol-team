@@ -13,11 +13,24 @@ week's work:
   is tagged with ``source`` / ``confidence`` / ``replace_before_real_training``
   metadata in the YAML.
 
-* ``MEASURED_VEHICLE`` (``ugrp_vehicle_measured.yaml``) — the future research
-  configuration. Required fields are ``null`` until the real UAV is measured.
-  Loading this file fails fast (``MissingMeasurementError``) and lists
-  exactly which measurements are still missing, matching the format asked
-  for in the task spec.
+* ``MEASURED_VEHICLE`` (``ugrp_vehicle_measured.yaml``) — the real research
+  configuration. Populated with mass, full motor geometry, CG, battery
+  position, spin layout and component specs (2026-09-16) and the measured
+  diagonal inertia tensor Ixx/Iyy/Izz (2026-09-19); max collective thrust and
+  the identified closed-loop response (tau_*, actuator delay) are still
+  ``null``. Loading this file fails fast (``MissingMeasurementError``) and
+  lists exactly which measurements are still missing. The inertia's
+  provenance (bifilar reduction, per-axis std/variance/n, outlier policy,
+  ASSUMED_ZERO_FOR_V0 products of inertia) lives in the free-form
+  ``mass_properties.meta`` dict: it is recorded, and consumed by nothing.
+
+  That file also carries a ``raw_measurements`` block (see
+  ``RawMeasurements``) which this module parses but NOTHING in
+  ``landing_mujoco/dynamics/`` consumes. It preserves the as-measured
+  numbers and the definition of the datum they were taken in, so that every
+  converted body-frame coordinate stays independently recomputable from its
+  source. It is optional, so configs that omit it
+  (``tarot680b_reference.yaml``) parse unchanged.
 
 No numeric value is ever invented by this module. The only computed value is
 the provisional inertia tensor, and only when ``inertia_estimation_mode:
@@ -33,6 +46,7 @@ needs to change.
 from __future__ import annotations
 
 import enum
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Optional
@@ -82,15 +96,55 @@ class MassProperties:
     meta: dict[str, Any] = field(default_factory=dict)
 
 
+# How ``Geometry.landing_gear_points_body_m`` is to be read.
+#
+#   geom_center       legacy / reference-config reading: each point IS the
+#                     centre of the simulated contact sphere. The physical
+#                     contact surface is then one sphere radius BELOW the
+#                     point, so a point at z = h rests the CG at h + radius.
+#   physical_contact  each point is where the real gear touches the ground in
+#                     the landed pose (PHYSICAL). The sphere centre is a
+#                     SIMULATION quantity derived by the MJCF builder
+#                     (``landing_gear_sphere_centers_body_m``) and never
+#                     stored: centre_z = point_z - sphere_radius (FRD, +z down).
+LANDING_GEAR_POINTS_GEOM_CENTER = "geom_center"
+LANDING_GEAR_POINTS_PHYSICAL_CONTACT = "physical_contact"
+LANDING_GEAR_POINT_SEMANTICS = (
+    LANDING_GEAR_POINTS_GEOM_CENTER,
+    LANDING_GEAR_POINTS_PHYSICAL_CONTACT,
+)
+
+
 @dataclass
 class Geometry:
     wheelbase_m: Optional[float] = None
     arm_length_m: Optional[float] = None
+    # Arm angle away from +x (forward), degrees. 45.0 == symmetric X-frame.
+    # Stays None unless a specific vehicle's frame symmetry is confirmed --
+    # it is the documented basis for any derived motor XY.
+    arm_angle_deg: Optional[float] = None
     frame_footprint_m: Optional[tuple[float, float]] = None
     frame_height_m: Optional[float] = None
+    # PHYSICAL: vertical distance from the body origin (the CG) DOWN to the
+    # ground / landing-contact plane in the normal landed pose, i.e. the body
+    # frame (FRD, +z down) z of the ground plane. Never a simulation-geom
+    # offset: the contact-sphere centre is ``ground_clearance_m - radius`` and
+    # is derived by the MJCF builder, not stored here.
     ground_clearance_m: Optional[float] = None
     landing_gear_points_body_m: Optional[np.ndarray] = None  # (N,3)
+    # How to read ``landing_gear_points_body_m`` (see the constants above).
+    # The default is the legacy reading so configs that predate this field
+    # (tarot680b_reference.yaml) keep their exact behavior.
+    landing_gear_points_semantics: str = LANDING_GEAR_POINTS_GEOM_CENTER
     meta: dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if self.landing_gear_points_semantics not in LANDING_GEAR_POINT_SEMANTICS:
+            raise ValueError(
+                "landing_gear_points_semantics must be one of "
+                f"{LANDING_GEAR_POINT_SEMANTICS}, got "
+                f"{self.landing_gear_points_semantics!r}"
+            )
 
 
 @dataclass
@@ -114,6 +168,7 @@ class PropellerSpec:
     diameter_m: Optional[float] = None
     pitch_m: Optional[float] = None
     blade_count: Optional[int] = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -122,6 +177,7 @@ class BatterySpec:
     nominal_voltage_v: Optional[float] = None
     mass_kg: Optional[float] = None
     position_body_m: Optional[np.ndarray] = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -129,6 +185,7 @@ class ESCSpec:
     model: Optional[str] = None
     protocol: Optional[str] = None
     max_current_a: Optional[float] = None
+    meta: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -160,6 +217,111 @@ class IdentifiedResponse:
 
 
 @dataclass
+class RawMeasurements:
+    """As-measured numbers in a physical measurement datum that has NOT yet
+    been reconciled with the FRD body frame.
+
+    This block is deliberately separate from every ``*_body_m`` field: it is
+    read by nothing in ``landing_mujoco/dynamics/`` and never reaches MuJoCo.
+    It preserves the measurements verbatim so that every converted body-frame
+    coordinate stays independently recomputable from its source.
+
+    ``datum_status`` gates conversion. While it is ``PENDING_DEFINITION``,
+    only ABSOLUTE separations are meaningful. Once ``RESOLVED``, the datum
+    origin and up-axis are recorded and ``body_z_from_raw_height`` defines
+    the conversion.
+
+    The ``abs_*`` accessors are kept AFTER resolution on purpose: they are
+    computed straight from the raw pair, so they remain an independent check
+    that a stored body-frame magnitude still matches its measurement. A
+    signed accessor derived from the same conversion would prove nothing.
+    """
+
+    datum_status: str = "PENDING_DEFINITION"
+    datum_note: Optional[str] = None
+    datum_origin: Optional[str] = None
+    datum_up_axis: Optional[str] = None
+    datum_resolved_date: Optional[str] = None
+    cg_raw_m: Optional[np.ndarray] = None
+    motor_plane_raw_z_m: Optional[float] = None
+    battery_center_raw_m: Optional[np.ndarray] = None
+    motor_radial_distance_m: Optional[float] = None
+    meta: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def datum_resolved(self) -> bool:
+        """True only once the datum origin and +Z direction are recorded.
+        Guard any datum->FRD conversion on this."""
+        return self.datum_status == "RESOLVED"
+
+    def body_z_from_raw_height(self, raw_height_m: float) -> float:
+        """Convert a raw-datum height into the FRD body-frame z.
+
+        Valid only for a ``+z_up`` datum measured against a surface, with the
+        body origin at the CG: the conversion is an origin shift to the CG
+        plus a Z sign flip, i.e. ``z_body = cg_raw_z - raw_z``. A positive
+        result therefore means BELOW the CG (FRD +Z is down).
+
+        Raises if the datum is unresolved, if its up-axis is not ``+z_up``,
+        or if the CG reference is missing -- it never guesses a sign.
+        """
+        if not self.datum_resolved:
+            raise ValueError(
+                f"cannot convert: datum_status is {self.datum_status!r}, not "
+                "'RESOLVED' -- the datum origin and +Z direction must be "
+                "recorded before any raw height becomes a body-frame value"
+            )
+        if self.datum_up_axis != "+z_up":
+            raise ValueError(
+                f"unsupported datum_up_axis {self.datum_up_axis!r}; this "
+                "conversion is defined only for '+z_up'"
+            )
+        if self.cg_raw_m is None:
+            raise ValueError("cannot convert: raw_measurements.cg_raw_m is null")
+        return float(self.cg_raw_m[2]) - float(raw_height_m)
+
+    def abs_motor_plane_to_cg_m(self) -> Optional[float]:
+        """|motor_plane_z - cg_z|, computed from the raw pair."""
+        if self.motor_plane_raw_z_m is None or self.cg_raw_m is None:
+            return None
+        return abs(float(self.motor_plane_raw_z_m) - float(self.cg_raw_m[2]))
+
+    def abs_cg_to_battery_m(self) -> Optional[float]:
+        """|cg_z - battery_center_z|, computed from the raw pair."""
+        if self.battery_center_raw_m is None or self.cg_raw_m is None:
+            return None
+        return abs(float(self.cg_raw_m[2]) - float(self.battery_center_raw_m[2]))
+
+
+def motor_xy_from_radial_distance(
+    radial_distance_m: float, arm_angle_deg: float
+) -> dict[str, np.ndarray]:
+    """Motor XY in the FRD body frame (+x forward, +y right, so left is -y)
+    for a symmetric X-layout quad, given the center-to-motor radial distance.
+
+    ``radial_distance_m`` is the CENTER-to-motor-center distance (what
+    ``geometry.arm_length_m`` holds), NOT the opposite-motor diagonal and NOT
+    the x/y component. Each returned point satisfies
+    ``hypot(x, y) == radial_distance_m`` exactly.
+
+    ``arm_angle_deg`` is the angle of each arm away from the +x (forward)
+    axis, and is deliberately REQUIRED with no default: 45 degrees is an
+    assumption about a specific airframe, and a default would let callers
+    inherit it silently. This is a geometric helper, not a claim that any
+    particular vehicle has that arm angle.
+    """
+    r = float(radial_distance_m)
+    theta = math.radians(float(arm_angle_deg))
+    x, y = r * math.cos(theta), r * math.sin(theta)
+    return {
+        "FL": np.array([x, -y], dtype=np.float64),
+        "FR": np.array([x, y], dtype=np.float64),
+        "RL": np.array([-x, -y], dtype=np.float64),
+        "RR": np.array([-x, y], dtype=np.float64),
+    }
+
+
+@dataclass
 class UAVPhysicalParams:
     parameter_set: ParameterSet
     vehicle_name: str
@@ -172,6 +334,10 @@ class UAVPhysicalParams:
     thrust: ThrustSpec
     identified_response: IdentifiedResponse
     source_path: str
+    # Optional provenance block. Defaulted so existing configs that omit it
+    # (tarot680b_reference.yaml) parse unchanged, and so the single
+    # construction site below stays the only one that must know about it.
+    raw_measurements: RawMeasurements = field(default_factory=RawMeasurements)
 
     def hover_thrust_n(self, gravity_mps2: float) -> float:
         return float(self.mass_properties.mass_kg) * float(gravity_mps2)
@@ -199,15 +365,25 @@ def landing_reference_point_body_m(geometry: Geometry) -> np.ndarray:
     frame, relative to CG: ``r_landing^B``.
 
     Deliberately does NOT assume this equals ``geometry.ground_clearance_m``
-    (a separate, informational scalar) -- it is derived explicitly from the
-    actual per-leg contact geometry (``landing_gear_points_body_m``, the
-    same points ``mjcf_builder`` uses for MuJoCo collision geoms) whenever
-    that is available, by averaging the per-leg points. This is the single
-    point a symmetric (or near-symmetric) gear layout rests on.
+    (a separate scalar) -- it is derived explicitly from the actual per-leg
+    contact geometry (``landing_gear_points_body_m``) whenever that is
+    available, by averaging the per-leg points. This is the single point a
+    symmetric (or near-symmetric) gear layout rests on.
 
-    Falls back to ``[0, 0, ground_clearance_m]`` (x/y assumed centered)
-    ONLY when per-leg points are not given -- a distinct, clearly separate
-    code path, not a silent assumption that the two are the same value.
+    What that point IS depends on ``geometry.landing_gear_points_semantics``:
+    with ``physical_contact`` it is the physical touchdown point (where the
+    real gear meets the ground, so ``altitude_agl`` reaches 0 at true
+    contact); with the legacy ``geom_center`` it is the mean of the simulated
+    sphere CENTRES, one sphere radius above the physical contact surface.
+
+    Falls back to ``[0, 0, ground_clearance_m]`` ONLY when per-leg points are
+    not given -- a distinct, clearly separate code path, not a silent
+    assumption that the two are the same value. ``ground_clearance_m`` is the
+    PHYSICAL CG-to-ground distance, so this fallback is a physical touchdown
+    point. Its x/y are ASSUMED centred under the CG (per-leg x/y unknown); that
+    assumption only affects the lateral offset of the reference point under
+    tilt. It creates NO contact geometry: ``mjcf_builder`` builds collision
+    geoms from ``landing_gear_points_body_m`` only.
     """
     if geometry.landing_gear_points_body_m is not None and len(geometry.landing_gear_points_body_m) > 0:
         return np.mean(geometry.landing_gear_points_body_m, axis=0).astype(np.float64)
@@ -268,6 +444,8 @@ def _vec3(raw: Optional[list]) -> Optional[np.ndarray]:
     return arr
 
 
+
+
 def _parse_mass_properties(raw: dict) -> MassProperties:
     inertia_raw = raw.get("inertia_kgm2") or {}
     return MassProperties(
@@ -287,11 +465,15 @@ def _parse_geometry(raw: dict) -> Geometry:
     return Geometry(
         wheelbase_m=raw.get("wheelbase_m"),
         arm_length_m=raw.get("arm_length_m"),
+        arm_angle_deg=raw.get("arm_angle_deg"),
         frame_footprint_m=tuple(footprint) if footprint else None,
         frame_height_m=raw.get("frame_height_m"),
         ground_clearance_m=raw.get("ground_clearance_m"),
         landing_gear_points_body_m=(
             np.asarray(landing_gear, dtype=np.float64) if landing_gear else None
+        ),
+        landing_gear_points_semantics=raw.get(
+            "landing_gear_points_semantics", LANDING_GEAR_POINTS_GEOM_CENTER
         ),
         meta=raw.get("meta", {}),
     )
@@ -318,6 +500,7 @@ def _parse_propellers(raw: dict) -> PropellerSpec:
         diameter_m=raw.get("diameter_m"),
         pitch_m=raw.get("pitch_m"),
         blade_count=raw.get("blade_count"),
+        meta=raw.get("meta", {}),
     )
 
 
@@ -328,6 +511,7 @@ def _parse_battery(raw: dict) -> BatterySpec:
         nominal_voltage_v=raw.get("nominal_voltage_v"),
         mass_kg=raw.get("mass_kg"),
         position_body_m=_vec3(pos) if pos else None,
+        meta=raw.get("meta", {}),
     )
 
 
@@ -336,6 +520,7 @@ def _parse_esc(raw: dict) -> ESCSpec:
         model=raw.get("model"),
         protocol=raw.get("protocol"),
         max_current_a=raw.get("max_current_a"),
+        meta=raw.get("meta", {}),
     )
 
 
@@ -358,6 +543,21 @@ def _parse_identified_response(raw: dict) -> IdentifiedResponse:
         k_pitch=raw.get("K_pitch"),
         k_thrust=raw.get("K_thrust"),
         k_yaw=raw.get("K_yaw"),
+        meta=raw.get("meta", {}),
+    )
+
+
+def _parse_raw_measurements(raw: dict) -> RawMeasurements:
+    return RawMeasurements(
+        datum_status=raw.get("datum_status", "PENDING_DEFINITION"),
+        datum_note=raw.get("datum_note"),
+        datum_origin=raw.get("datum_origin"),
+        datum_up_axis=raw.get("datum_up_axis"),
+        datum_resolved_date=str(raw["datum_resolved_date"]) if raw.get("datum_resolved_date") else None,
+        cg_raw_m=_vec3(raw.get("cg_raw_m")),
+        motor_plane_raw_z_m=raw.get("motor_plane_raw_z_m"),
+        battery_center_raw_m=_vec3(raw.get("battery_center_raw_m")),
+        motor_radial_distance_m=raw.get("motor_radial_distance_m"),
         meta=raw.get("meta", {}),
     )
 
@@ -394,6 +594,7 @@ def load_uav_params(path: str | Path, *, validate: bool = True) -> UAVPhysicalPa
         thrust=_parse_thrust(raw.get("thrust", {})),
         identified_response=_parse_identified_response(raw.get("identified_response", {})),
         source_path=str(path),
+        raw_measurements=_parse_raw_measurements(raw.get("raw_measurements", {})),
     )
 
     mp = params.mass_properties

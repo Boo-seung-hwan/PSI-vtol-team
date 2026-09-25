@@ -26,7 +26,15 @@ the vehicle CG. Mass and inertia are given via an explicit ``<inertial pos="0
 
 Ground contact
 --------------
-Only the landing-gear points get contact-enabled geoms (small spheres).
+Only the landing-gear points get contact-enabled geoms (small spheres of
+radius ``LEG_CONTACT_RADIUS_M``). Physical contact geometry and its simulation
+representation are kept apart: with ``landing_gear_points_semantics:
+physical_contact`` the config stores where the real gear touches the ground
+and the builder derives each sphere centre one radius above it
+(``landing_gear_sphere_centers_body_m``), so the CG rests at the physical
+``ground_clearance_m``. The legacy ``geom_center`` reading (reference config)
+is unchanged. With no per-leg points there are no contact geoms.
+
 The center-body box and the arm/motor markers are visual/collision-disabled
 (``contype="0" conaffinity="0"``) -- they do not need to visually reproduce
 every component, but the landing-gear contact points must be physically
@@ -45,21 +53,69 @@ change from the legacy model, not a hidden retune -- see ``MUJOCO_MODEL.md``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 from xml.etree import ElementTree as ET
 from xml.dom import minidom
 
+import numpy as np
+
+from landing_mujoco.configs.param_schema import LANDING_GEAR_POINTS_PHYSICAL_CONTACT
 from landing_mujoco.coordinates.transforms import frd_vector_to_mujoco_body
 
 if TYPE_CHECKING:
-    from landing_mujoco.configs.param_schema import UAVPhysicalParams
+    from landing_mujoco.configs.param_schema import Geometry, UAVPhysicalParams
 
+# SIMULATION representation of a landing-gear foot: a sphere of this radius.
+# This is NOT a physical parameter of the vehicle (nothing measured it) and is
+# never stored in a physical-parameter YAML.
 LEG_CONTACT_RADIUS_M = 0.02
 ARM_MARKER_RADIUS_M = 0.012
 MOTOR_MARKER_RADIUS_M = 0.03
 # Geom group for the placeholder markers when the x500 visual shell is on
 # (MuJoCo's viewer shows groups 0-2 by default; 3 is hidden but toggleable).
 PLACEHOLDER_MARKER_GROUP_WITH_SHELL = 3
+
+
+def _coord(value: float) -> str:
+    """MJCF text for a coordinate: the legacy 4-dp form when it round-trips
+    exactly (so existing MJCFs stay byte-identical), full-precision ``repr``
+    otherwise (so no measured value is silently rounded to 0.1 mm)."""
+    short = f"{value:.4f}"
+    return short if float(short) == value else repr(value)
+
+
+def landing_gear_sphere_centers_body_m(
+    geometry: "Geometry", radius: float = LEG_CONTACT_RADIUS_M
+) -> Optional[np.ndarray]:
+    """Centres of the simulated landing-gear contact spheres, FRD body frame.
+
+    This is the seam between the PHYSICAL contact geometry and its SIMULATION
+    representation. ``geometry.landing_gear_points_body_m`` holds either
+    (``landing_gear_points_semantics``):
+
+    * ``physical_contact`` -- the points where the real gear touches the ground
+      in the landed pose (z = ``ground_clearance_m`` for a level landing). The
+      sphere must TOUCH the ground there, so its centre sits one ``radius``
+      above the contact point, toward the CG: in FRD (+z down)
+      ``centre_z = point_z - radius`` (e.g. 0.241 - 0.020 = 0.221). The offset
+      is along body z, i.e. it assumes the gear stands vertically in the
+      landed pose. x/y are unchanged.
+    * ``geom_center`` (legacy default) -- the points are already sphere
+      centres and are returned unchanged, so existing configs keep their exact
+      MJCF and resting height.
+
+    Returns ``None`` when no per-leg points exist (per-leg x/y unknown): no
+    contact geoms are invented from ``ground_clearance_m`` alone.
+    """
+    points = geometry.landing_gear_points_body_m
+    if points is None:
+        return None
+    points = np.asarray(points, dtype=np.float64)
+    if geometry.landing_gear_points_semantics == LANDING_GEAR_POINTS_PHYSICAL_CONTACT:
+        centers = points.copy()
+        centers[:, 2] -= float(radius)
+        return centers
+    return points
 
 
 def build_mjcf(
@@ -133,6 +189,12 @@ def build_mjcf(
         {"name": "vehicle", "pos": f"0 0 {initial_altitude_m:.3f}"},
     )
     ET.SubElement(vehicle, "freejoint", {"name": "vehicle_free"})
+    # Frame note for the inertia written below: the config tensor is in the
+    # FRD policy body frame, MuJoCo's local body frame is FLU, and the two are
+    # related by R = diag(1, -1, -1). For a DIAGONAL tensor R I R^T == I, so
+    # Ixx/Iyy/Izz pass through unconverted. This is true ONLY because the
+    # products of inertia are (assumed) zero: a non-zero Ixy/Ixz would flip
+    # sign (Ixy -> -Ixy, Ixz -> -Ixz, Iyz -> +Iyz) and would need converting.
     ET.SubElement(
         vehicle,
         "inertial",
@@ -179,13 +241,19 @@ def build_mjcf(
                 float(v)
                 for v in frd_vector_to_mujoco_body(motors.positions_body_m[name])
             )
+            # Motor coordinates must reach the compiled model without the
+            # 0.1 mm rounding of the legacy ``.4f`` text (measured a =
+            # 0.25455844... would become 0.2546, i.e. a 0.36006 m radius).
+            # ``_coord`` keeps the legacy text whenever it is lossless, so
+            # existing configs stay byte-identical. These markers are
+            # massless and collision-disabled: no dynamics are affected.
             ET.SubElement(
                 vehicle,
                 "geom",
                 {
                     "name": f"arm_{name}",
                     "type": "capsule",
-                    "fromto": f"0 0 0 {x:.4f} {y:.4f} {z:.4f}",
+                    "fromto": f"0 0 0 {_coord(x)} {_coord(y)} {_coord(z)}",
                     "size": f"{ARM_MARKER_RADIUS_M:.4f}",
                     "rgba": "0.1 0.1 0.1 1",
                     **marker_group,
@@ -197,16 +265,19 @@ def build_mjcf(
                 {
                     "name": f"motor_{name}",
                     "type": "sphere",
-                    "pos": f"{x:.4f} {y:.4f} {z:.4f}",
+                    "pos": f"{_coord(x)} {_coord(y)} {_coord(z)}",
                     "size": f"{MOTOR_MARKER_RADIUS_M:.4f}",
                     "rgba": "0.8 0.1 0.1 1",
                     **marker_group,
                 },
             )
 
-    # Landing-gear contact points -- the only geoms with collision enabled.
-    if geom.landing_gear_points_body_m is not None:
-        for i, point in enumerate(geom.landing_gear_points_body_m):
+    # Landing-gear contact spheres -- the only geoms with collision enabled.
+    # ``sphere_centers`` are SIMULATION positions, derived from the physical
+    # contact points by ``landing_gear_sphere_centers_body_m``.
+    sphere_centers = landing_gear_sphere_centers_body_m(geom)
+    if sphere_centers is not None:
+        for i, point in enumerate(sphere_centers):
             x, y, z = (float(v) for v in frd_vector_to_mujoco_body(point))
             ET.SubElement(
                 vehicle,
@@ -214,7 +285,11 @@ def build_mjcf(
                 {
                     "name": f"leg_{i}",
                     "type": "sphere",
-                    "pos": f"{x:.4f} {y:.4f} {z:.4f}",
+                    # Same lossless-or-legacy rule as the motor markers:
+                    # landing_reference_point_body_m() reads the full-precision
+                    # Python array, so the collision geoms must not be rounded
+                    # to 0.1 mm behind its back.
+                    "pos": f"{_coord(x)} {_coord(y)} {_coord(z)}",
                     "size": f"{LEG_CONTACT_RADIUS_M:.4f}",
                     "contype": "1",
                     "conaffinity": "1",
