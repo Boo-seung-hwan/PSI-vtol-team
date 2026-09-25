@@ -1,13 +1,44 @@
 # UGRP Precision-Landing Project Handover
 
-Last updated: 2026-09-14 (x500 visual shell, visualization only, split-shell
+Last updated: 2026-09-25 (RL Baseline v0.1 packaging pass -- repository engineering only, NO research-behaviour change; see §0.12 and the 2026-09-25 §9 entry. `[SUPERSEDED]` the "UNCOMMITTED" / "Not pushed" statements below about the 2026-09-19 measured-vehicle work: it is now COMMITTED as `6c4fd81` (parameters, MJCF injection, tests) and `a666ab8` (`MUJOCO_MODEL.md`) on top of `6306699`; the handover file itself is committed last. Still NOT pushed.)
+Previous revision, 2026-09-19 (was "latest" until 2026-09-25; fourth pass: the skid-type landing gear is
+recorded as four PHYSICAL contact points DERIVED from the confirmed skid length
+0.300 m / spacing 0.310 m under a CENTERED_SYMMETRY_ASSUMPTION — `landing_gear_
+points_body_m` in `ugrp_vehicle_measured.yaml`; four contact spheres now exist
+in the measured MJCF; landed and ±5° tilted contact verified; see §0.11.5 and
+the fourth 2026-09-19 §9 entry. Third pass: landed-pose geometry fixed —
+`ground_clearance_m = 0.241` stored as a PHYSICAL parameter, the 0.020 m gear
+sphere radius kept as a SIMULATION constant in the MJCF builder, and the 0.221 m
+sphere-centre offset DERIVED, never stored; dynamically verified, see §0.11.5
+and the third 2026-09-19 §9 entry. Second pass: `MUJOCO_MODEL.md` rewritten,
+documentation only. First pass: bifilar-measured Ixx/Iyy/Izz recorded in
+`landing_mujoco/configs/ugrp_vehicle_measured.yaml` and shown to reach the
+COMPILED MuJoCo model — mass 6.408 kg, diagonal inertia, CG-origin inertial
+frame and motor markers verified in `mjModel`; the analytical `landing_rl`
+path is untouched (218/218 identical). Propulsion / closed-loop response are
+still unmeasured, so `MuJoCoDynamics` / `MujocoLandingEnv` still cannot be
+built from the measured config — see §0.11.5 and the 2026-09-19 §9 entry.
+UNCOMMITTED on top of `6306699`.)
+Before that (2026-09-16): measurement datum and 45° X-frame symmetry
+confirmed by the user, so CG / motor / battery coordinates were promoted to
+confirmed FRD body-frame values in
+`landing_mujoco/configs/ugrp_vehicle_measured.yaml` — storage/provenance
+only, runtime physics UNCHANGED (`landing_rl` 218/218 identical); see §0.11
+and both 2026-09-16 §9 entries. **Inertia (Ixx/Iyy/Izz) is now the only
+remaining geometry/mass blocker.** This revision is UNCOMMITTED on top of
+`6306699`.
+Before that: interactive MuJoCo viewer SIGSEGV diagnosis
+on the user's WSLg desktop — local graphics-driver fault, NO code/model change;
+that revision of the file was then-uncommitted on top of `6306699` and is
+carried forward here, see its §9 entry. Before that: x500 visual shell,
+visualization only, split-shell
 landing gear, pinned PX4-gazebo-models provenance, vendor copy removed;
 committed as "Add x500 visual shell to MuJoCo landing environment" on top of
 `7b231ef` — see the 2026-09-14 §9 entries and the SESSION CLOSEOUT entry. Earlier: 2026-09-13 entry-point migration +
 VehicleDynamicsBackend seam + provisional `landing_mujoco/` MuJoCo pipeline)
 Repository: `/home/qntmdghkss/drone_stack_rl_refactor` (a Git worktree of the UGRP drone_stack repository; per CLAUDE.md §5 this path is not guaranteed stable across sessions/machines — always re-verify with `git rev-parse --show-toplevel`)
 Branch: `refactor/landing-rl-architecture`
-HEAD: the commit containing this revision of the file — "Add x500 visual shell to MuJoCo landing environment", parent `7b231ef082c5124b0140639b79e5f518599f6f06` ("Add provisional MuJoCo landing simulation pipeline"); resolve its hash with `git log -1 --format=%H -- PROJECT_HANDOVER.md`. The 2026-09-13 work is committed as `53e1ce6` (entry-point migration), `e3b408f` (VehicleDynamicsBackend seam), `7b231ef` (provisional MuJoCo pipeline). The 2026-09-14 x500 visual shell is committed in the visualization commit (all under `landing_mujoco/` plus `MUJOCO_MODEL.md` and this file; nothing under `landing_rl/` or `mujoco_rl/`). Not pushed.
+HEAD (verified 2026-09-14, viewer-diagnosis session): `6306699871122cd985a3e35ebd1b93ce575aeaa4` — "Add x500 visual shell to MuJoCo landing environment", parent `7b231ef082c5124b0140639b79e5f518599f6f06` ("Add provisional MuJoCo landing simulation pipeline"). The viewer-diagnosis revision of this file was written on top of `6306699` and left UNCOMMITTED; if it has since been committed, resolve that commit with `git log -1 --format=%H -- PROJECT_HANDOVER.md`. The 2026-09-13 work is committed as `53e1ce6` (entry-point migration), `e3b408f` (VehicleDynamicsBackend seam), `7b231ef` (provisional MuJoCo pipeline). The 2026-09-14 x500 visual shell is committed in the visualization commit (all under `landing_mujoco/` plus `MUJOCO_MODEL.md` and this file; nothing under `landing_rl/` or `mujoco_rl/`). Not pushed.
 [HISTORICAL — superseded by the line above] Before the 2026-09-13 commits, HEAD was `9a154df` and all 2026-09-13 work was uncommitted.
 
 This document is created for the first time in this session. No prior
@@ -286,6 +317,12 @@ above).
   motor geometry, `T_max`, `tau_roll/pitch/thrust`, `T_delay` are all
   `null` in `landing_mujoco/configs/ugrp_vehicle_measured.yaml`, pending
   next week's measurement per explicit user statement this session).
+  `[CORRECTION — 2026-09-19]` That last sentence has been false since
+  2026-09-16 and is now much further from true: mass, CG, motor geometry,
+  battery position (2026-09-16) and the diagonal inertia Ixx/Iyy/Izz
+  (2026-09-19) are populated in that YAML. Still `null`: `T_max`,
+  `tau_roll/pitch/thrust`, `T_delay` and the landing-gear contact geometry.
+  See §0.11.
 - `system_id/` is **partially implemented**: `preprocessing/` exists (§5);
   `identification/`, `validation/`, `results/` are still empty. No UGRP
   parameter identified. The only ULogs available are OTHER-PROJECT sample
@@ -317,16 +354,56 @@ above).
   latter. `altitude_agl` is kept as a separate physical-clearance quantity
   (gear-point height above ground at current attitude), independent of
   `z_error` by construction. See §9 and `MUJOCO_MODEL.md`.
+- `[OPEN — 2026-09-14]` The x500 visual shell has **not yet been visually
+  inspected by the user** in an interactive viewer (overall appearance, shell
+  orientation, scale 1.4975221199266826, motor / propeller / landing-gear
+  alignment, ground alignment, CG/body-reference relationship). The only
+  visual evidence so far is OSMesa offscreen renders. On the user's WSL
+  desktop the interactive viewer segfaults on the default Intel Iris Xe D3D12
+  adapter — a local graphics-driver fault, NOT a repository/model bug; the
+  candidate workaround is `MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA` (fallback
+  `LIBGL_ALWAYS_SOFTWARE=1`), not yet visually confirmed. See the §9 entry
+  "interactive MuJoCo viewer SIGSEGV on WSLg". This does not change §0.10.
 
 ## 0.10 Immediate next step
 
-`[CURRENT — 2026-09-14 session closeout, user-specified]` The next session
-starts with **real UGRP vehicle parameter measurement / injection** into
+`[CURRENT — 2026-09-25]` Before the baseline is shared: the user reviews and approves pushing the local baseline commits (§0.12); nothing has been pushed. The physical-model next step below (propulsion calibration) is unchanged and independent of this.
+
+`[CURRENT — 2026-09-19]` **Physical-inertia injection is complete;
+propulsion calibration is pending.** The measured mass, CG, diagonal inertia
+and motor geometry now reach the compiled MuJoCo rigid body (§0.11.5). The
+minimum measurements still needed before the measured config can drive
+`MuJoCoDynamics` / `MujocoLandingEnv` are: `max_collective_thrust_n`,
+`tau_roll_s`, `tau_pitch_s`, `tau_thrust_s`, `actuator_delay_s`.
+`[CORRECTION — fourth 2026-09-19 pass]` the landing-gear part of this list is
+gone: `ground_clearance_m = 0.241 m` and the four skid contact points are
+recorded (§0.11.5); only the propulsion fields remain. The exact per-leg offset
+of the skid footprint from the CG is still an assumption (centred). No tuning was
+started this session.
+
+`[SUPERSEDED — 2026-09-19, by the item above]` `[CURRENT — 2026-09-16,
+second pass]` **Inertia measurement (Ixx / Iyy /
+Izz) is now the single remaining blocker** for a complete vehicle model.
+Both coordinate blockers are resolved: the measurement datum is defined
+(floor, +Z up → `z_body = cg_raw − raw`) and the exact 45° X-frame symmetry
+is confirmed, so CG, full 3-D motor positions and battery position are now
+recorded in the FRD body frame. Mass, motor geometry, spin layout and
+component specs were recorded earlier the same day. All of it remains
+storage/provenance only — no physics, no MuJoCo implementation, no behavior
+change. `max_collective_thrust_n` and the identified closed-loop response
+(`tau_*`, `delay_s`) also remain unmeasured, but neither blocks inertia
+work. See §0.11.
+
+`[HISTORICAL — partially satisfied by the 2026-09-16 session]` The
+2026-09-14 closeout specified: the next session starts with **real UGRP
+vehicle parameter measurement / injection** into
 `landing_mujoco/configs/ugrp_vehicle_measured.yaml` — NOT further
 visualization work, and NOT PPO training. Recommended order: mass → CG →
 inertia → motor positions → landing-gear geometry → max collective thrust →
 roll/pitch/thrust response identification → actuator delay → real-flight vs
-MuJoCo validation. See the final 2026-09-14 §9 closeout entry.
+MuJoCo validation. See the final 2026-09-14 §9 closeout entry. Mass and
+motor radial distance are now done; CG is measured but datum-blocked;
+inertia onward remain open.
 
 `[HISTORICAL — superseded by the item above]` The text below predates the
 2026-09-14 closeout.
@@ -362,6 +439,491 @@ picks one:
     the landing-gear-standoff task-semantics issue is resolved;
   * unrelated legacy-RL items (reward/termination extraction, populating
     `landing_rl/configs/*`) remain open.
+
+## 0.11 Vehicle physical parameters
+
+`[CURRENT — 2026-09-16]` Canonical source:
+**`landing_mujoco/configs/ugrp_vehicle_measured.yaml`**
+(schema + loader: `landing_mujoco/configs/param_schema.py`; validator CLI:
+`python3 -m landing_mujoco.check_parameter_set --parameter-set
+ugrp_vehicle_measured`). This is the ONLY place real UGRP vehicle numbers
+are recorded. `tarot680b_reference.yaml` describes a **different,
+unmeasured airframe** and must never be used to back-fill it.
+
+`[SUPERSEDED — 2026-09-19]` ~~`[CAUTION]` Recording ≠ applying. None of the
+values below are wired into any runtime physics.~~
+
+`[CORRECTION — 2026-09-19]` That statement is no longer true for MuJoCo.
+`landing_mujoco/dynamics/mjcf_builder.py` consumes `mass_properties.mass_kg`,
+`ixx/iyy/izz` and `motors.positions_body_m` from this YAML, and the
+**compiled `mjModel`** built from it carries the measured values (§0.11.5).
+What is still true: (a) the analytical `landing_rl` legacy dynamics is fully
+mass-normalized — it carries no mass, inertia or geometry at all (§0.11.4) —
+so its behavior is UNCHANGED; (b) `load_uav_params()` on this config still
+raises `MissingMeasurementError` (5 propulsion / response fields), so
+`MuJoCoDynamics` / `MujocoLandingEnv` / `check_parameter_set` still cannot be
+built from it — only the rigid-body MJCF can, via `validate=False`.
+Everything not listed as consumed in §0.11.5 (raw datum, component specs,
+spin directions, battery position, inertia provenance) remains
+record-only.
+
+### 0.11.1 Parameter table
+
+Status vocabulary: **MEASURED** (physically measured on the assembled
+vehicle) · **USER_PROVIDED_SPEC** (component model designation / nameplate
+figure supplied by the user; not read from a datasheet held in this
+repository, not independently verified) · **USER_REPORTED_OBSERVATION** (a
+reported observation of how the vehicle is built — weaker than MEASURED: no
+instrument reading, no independent cross-check) · **DERIVED** (computed from
+another recorded value under a stated assumption) · **UNKNOWN** (no evidence
+yet). Tags are asserted by tests, so promoting one is a visible change.
+
+| Parameter | Value | Unit | Status | Source / Note |
+|---|---|---|---|---|
+| total mass | 6.408 | kg | MEASURED | 6408 g, 2026-09-16. `[CORRECTION 2026-09-19]` the weighing configuration IS now stated (user): the full actual flight configuration — battery, ~1.8 kg ballast brick, motors, ESCs, frame, electronics, landing gear, wiring. Applied once, to the single MuJoCo root body; nothing is added on top |
+| motor radial distance | 0.360 | m | MEASURED | center → motor center. **Not** the opposite-motor diagonal. Stored as `geometry.arm_length_m` |
+| motor spin — FL | CW | — | USER_REPORTED_OBSERVATION | X-frame; diagonals share direction. Weaker than MEASURED: a reported build observation, not an instrument reading; **not** cross-checked against the PX4 actuator/motor assignment |
+| motor spin — FR | CCW | — | USER_REPORTED_OBSERVATION | |
+| motor spin — RL | CCW | — | USER_REPORTED_OBSERVATION | |
+| motor spin — RR | CW | — | USER_REPORTED_OBSERVATION | |
+| arm angle | 45.0 | ° | USER_CONFIRMED | exact symmetric X-frame, confirmed 2026-09-16; the basis for the derived motor XY |
+| measurement datum | floor, +Z up | — | USER_CONFIRMED | resolved 2026-09-16 → `z_body_FRD = cg_raw_z − raw_z`. See §0.11.2 |
+| CG (raw datum) | [0, 0, 0.241] | m | MEASURED | height above floor; preserved in `raw_measurements` for provenance |
+| motor plane z (raw datum) | 0.334 | m | MEASURED | same datum |
+| battery center (raw datum) | [0, 0, 0.220] | m | MEASURED | same datum |
+| **physical ground clearance** `ground_clearance_m` (CG → ground plane, landed pose) | **0.241** (body z of the ground = **+0.241**) | m | MEASURED (raw CG height) · landed-pose datum USER_CONFIRMED 2026-09-19 | **stored** in the YAML as `geometry.ground_clearance_m` (third 2026-09-19 pass); see §0.11.2, §0.11.5 |
+| gear sphere radius | 0.020 | m | SIMULATION representation — not measured, **not stored** in the YAML | `LEG_CONTACT_RADIUS_M` in `mjcf_builder.py` |
+| sphere-centre offset (body z) | 0.221 (= 0.241 − 0.020) | m | DERIVED — **never stored**; must not be entered as clearance or contact point | `landing_gear_sphere_centers_body_m()` |
+| **CG (body, FRD)** | [0, 0, 0] | m | DERIVED | body origin **is** the CG; now a reconciled statement, not a default |
+| **motor positions (body, FRD)** | FL [+a,−a,−0.093] · FR [+a,+a,−0.093] · RL [−a,−a,−0.093] · RR [−a,+a,−0.093], a = 0.2545584412271571 | m | DERIVED | XY from `arm_length_m`+`arm_angle_deg`; Z from the datum conversion. Motors sit **above** the CG ⇒ negative in FRD |
+| **battery (body, FRD)** | [0, 0, +0.021] | m | DERIVED | positive ⇒ battery sits **below** the CG |
+| opposite-motor span | 0.720 | m | DERIVED | max pairwise horizontal distance; `wheelbase_m` left `null` on purpose — see §0.11.3a |
+| motor model | T-MOTOR MN501-S IP45 | — | USER_PROVIDED_SPEC | |
+| motor KV | 360 | rpm/V | USER_PROVIDED_SPEC | from the "KV360" designation only |
+| ESC model | HOBBYWING Skywalker V2 60A | — | USER_PROVIDED_SPEC | 3–6S, 7 A BEC built in |
+| ESC max current | 60 | A | USER_PROVIDED_SPEC | continuous, per designation |
+| propeller model | T-MOTOR MS1704 | — | USER_PROVIDED_SPEC | model string only; **not** decoded into diameter/pitch |
+| battery model | Poly-Tronics 8th Gen 10000 mAh 22.2 V 6S1P 75C+ XT90-S | — | USER_PROVIDED_SPEC | |
+| battery nominal voltage | 22.2 | V | USER_PROVIDED_SPEC | 6S1P nominal |
+| hover thrust, total | 62.8401 | N | DERIVED | `m·g`, g = 9.8065 (`LandingConfig.gravity_mps2`). With g = 9.80665 (landing_mujoco): 62.8410 N |
+| hover thrust, per motor | 15.7100 | N | DERIVED | = 1.602 kgf. Assumes **equal sharing** across 4 motors — the real CG offset means sharing is not exactly equal |
+| **Ixx** (roll) | **0.153184** | kg·m² | **MEASURED** | bifilar, manual stopwatch, n = 10, sample std 0.004362. Recorded 2026-09-19. See §0.11.5 |
+| **Iyy** (pitch) | **0.126285** | kg·m² | **MEASURED** | bifilar, n = 10, sample std 0.003041 |
+| **Izz** (yaw) | **0.149050** | kg·m² | **MEASURED** | bifilar, n = 9 (8.48 s outlier excluded), sample std 0.001698 |
+| Ixy, Ixz, Iyz | 0, 0, 0 | kg·m² | **ASSUMED_ZERO_FOR_V0** | **NOT measured.** Zero is a v0 modelling assumption, never "measured zero". MuJoCo receives `diaginertia` only; recorded in `mass_properties.meta.inertia_products_kgm2` |
+| inertia R² | N/A | — | N/A | manual stopwatch periods; no damped-sinusoid fit exists. Not fabricated |
+| max collective thrust | — | N | UNKNOWN | MN501-S + MS1704 combination not bench-tested |
+| thrust / torque coefficients | — | — | UNKNOWN | propulsion bench test pending |
+| motor time constant, ESC delay | — | s | UNKNOWN | not measured |
+| motor mass (each) | — | kg | UNKNOWN | |
+| battery mass | — | kg | UNKNOWN | |
+| frame footprint / height | — | m | UNKNOWN | not measured. `frame_height_m` is **not** the 0.334 m motor height |
+| skid effective length | **0.300** | m | USER_CONFIRMED | skid long axis = body X; recorded in `meta` of `landing_gear_points_body_m` |
+| skid centre-line spacing | **0.310** | m | USER_CONFIRMED | same |
+| skid half length / half spacing | 0.150 / 0.155 | m | DERIVED (length / 2, spacing / 2) | x / y of the contact points |
+| **landing-gear contact points** (FRD) | LF [+0.150, −0.155, +0.241] · LR [−0.150, −0.155, +0.241] · RF [+0.150, +0.155, +0.241] · RR [−0.150, +0.155, +0.241] | m | **DERIVED_FROM_MEASURED_DIMENSIONS + CENTERED_SYMMETRY_ASSUMPTION** — *not* four measured coordinates | `geometry.landing_gear_points_body_m` (fourth pass), `landing_gear_points_semantics: physical_contact` |
+| exact per-leg offset of the footprint from the CG | — | m | **MODELLING ASSUMPTION** (centred, symmetric) — not measured | `[CORRECTION 2026-09-19, fourth pass]` supersedes the previous "per-leg x/y UNKNOWN" row |
+| τ_roll, τ_pitch, τ_thrust, τ_yaw, delay | — | s | UNKNOWN | closed-loop SI not yet performed (§0.6; gated on PX4 gain stabilization per CLAUDE.md §3) |
+
+### 0.11.2 `[RESOLVED — 2026-09-16]` Measurement datum → body frame
+
+`[SUPERSEDED]` This subsection previously recorded the datum ambiguity as
+the project's blocking issue. The user resolved it on 2026-09-16; the
+original `[OPEN]` text is preserved in the 2026-09-16 §9 entries.
+
+`[FACT — USER_CONFIRMED]` The raw z-coordinates (CG 0.241, motor plane
+0.334, battery center 0.220) are heights measured from the **floor**, with
+**+Z pointing up**. The simulation body frame is **FRD** (+X forward,
++Y right, +Z **down**) with its **origin at the CG**. The two therefore
+differ by an origin shift to the CG plus a Z sign flip:
+
+```
+z_body_FRD = cg_raw_z − raw_z
+```
+
+| Quantity | Raw (floor, +up) | Body (FRD, +down) | Physical reading |
+|---|---|---|---|
+| CG | 0.241 m | **0.000 m** | the body origin, by definition |
+| motor plane | 0.334 m | **−0.093 m** | motors sit 93 mm **above** the CG |
+| battery center | 0.220 m | **+0.021 m** | battery sits 21 mm **below** the CG |
+
+The raw numbers remain in `raw_measurements:` (`datum_status: RESOLVED`,
+`datum_origin: floor`, `datum_up_axis: +z_up`) so the provenance chain stays
+auditable. `RawMeasurements.body_z_from_raw_height()` is the one definition
+of the conversion; it refuses to run on an unresolved datum or a non-`+z_up`
+datum rather than guessing a sign. Tests recompute every stored body-frame z
+from the raw pair, and one test asserts the sign convention is not
+accidentally inverted.
+
+`[CAUTION]` Resolving the datum did **not** determine `frame_height_m`
+(0.334 is a motor height, not a bounding dimension), `ground_clearance_m`,
+or `landing_gear_points_body_m`. All three stay `null`, enforced by test.
+Ground clearance in particular would require confirming the vehicle rested
+on its own landing gear on the datum floor — nobody stated that, and
+`landing_reference_point_body_m()` falls back to `[0,0,ground_clearance_m]`
+when gear points are absent, so a guess would silently become the touchdown
+reference. `[TODO]` Measure the landing-gear contact geometry.
+
+`[CORRECTION — 2026-09-19]` "nobody stated that" is superseded. `[FACT —
+USER_CONFIRMED]` The raw heights were measured with the vehicle in its
+**normal landed pose, landing gear on the ground**, ground plane = 0, height
+measured upward: CG 0.241 m, motor plane 0.334 m, battery centre 0.220 m above
+the ground. In the FRD CG-origin frame the CG stays `[0, 0, 0]` and the
+nominal **ground plane is at z = +0.241 m** (CG → ground = 0.241 m); writing
+"CG body z = +0.241" would be wrong. What this does and does not settle
+(detail: `MUJOCO_MODEL.md`, "Measured vehicle: ground plane…"):
+  * `[FACT]` The **vertical** CG→ground distance is known, and matches the
+    repo's definition of `ground_clearance_m` (CG down to the lowest contact
+    point in the landed pose).
+  * `[SUPERSEDED — see the `[DECISION]` below]` `[CAUTION]` It is still **not safe to enter 0.241 as a gear-point z**:
+    `mjcf_builder.py` models each gear point as the *centre* of a 0.02 m-radius
+    contact sphere, so a 0.241 m gear point rests the CG ≈ 0.261 m up
+    (read-only simulation, synthetic x/y), while ≈ 0.221 m reproduces the
+    measured 0.241 m. Which convention to adopt is `[OPEN]`, not decided.
+  * `[SUPERSEDED — fourth 2026-09-19 pass: x/y now derived from measured skid dimensions under a centred-symmetry assumption]` `[OPEN — x/y part still open]` Per-leg contact **x/y remain UNKNOWN**; `ground_clearance_m` alone
+    would stop `landing_reference_point_body_m()` raising but would create
+    **no contact geoms** (leg geoms are built only from
+    `landing_gear_points_body_m`), and the propulsion blockers remain.
+  * `[SUPERSEDED — YAML updated in the third pass]` `[CAUTION]`
+    `ugrp_vehicle_measured.yaml` still carries the old "not stated" wording
+    (header comment; `geometry.meta.ground_clearance_m`) and still has both gear
+    fields `null`. Left as is on purpose — that pass was documentation-only.
+
+`[DECISION — user, 2026-09-19, third pass]` `[SUPERSEDES]` the convention
+question above. Physical contact geometry and its MuJoCo representation are
+**separate quantities with separate owners**:
+
+```
+PHYSICAL (YAML)                      SIMULATION REPRESENTATION (mjcf_builder.py)
+  ground_clearance_m = 0.241           gear sphere radius        = 0.020
+  landing contact point z = +0.241     gear sphere centre z (FRD) = 0.221 (derived)
+```
+
+  * `ground_clearance_m = 0.241` is stored (source MEASURED, dated
+    2026-09-19). **0.221 must never be stored as clearance or contact point.**
+  * `Geometry.landing_gear_points_semantics` (`geom_center` legacy default |
+    `physical_contact`) says how `landing_gear_points_body_m` is read. The
+    measured YAML declares `physical_contact`; the reference YAML has no field ⇒
+    `geom_center` ⇒ **its MJCF is byte-identical** (hash pin unchanged).
+  * `mjcf_builder.landing_gear_sphere_centers_body_m()` derives
+    `centre_z = point_z − radius` (FRD); `build_mjcf` uses it. With no per-leg
+    points there are **no contact geoms** — none are invented.
+  * Dynamic verification (ground plane z = 0, gravity, released 0.5 m up, settle):
+    CG world z = 0.24092 m (4 legs) / 0.24089 m (3 legs), sphere bottom world z
+    = −0.079 / −0.105 mm (soft-contact sinking, linear in load ≈ 5 µm/N,
+    tolerance ±2 mm ≈ 6× the worst single-contact case). Negative control
+    (0.241 read as the sphere centre) rests at 0.2609 m, +19.9 mm.
+  * `[SUPERSEDED — fourth 2026-09-19 pass]` `[OPEN]` Per-leg x/y are still UNKNOWN and
+    not estimated; the tests use **synthetic** x/y (three layouts; the landed
+    height does not depend on them). The tests now use the canonical skid
+    footprint (see §0.11.5).
+
+### 0.11.3 `[RESOLVED — 2026-09-16]` Arm angle confirmed; motor geometry promoted
+
+`[SUPERSEDED]` This subsection previously recorded the ±45° arm angle as an
+unconfirmed assumption, which kept the motor XY out of
+`motors.positions_body_m`.
+
+`[FACT — USER_CONFIRMED]` The frame is an **exact symmetric 45° X-frame**,
+with center-to-motor radius R = 0.360 m, so `a = R/√2 = 0.2545584412271571`
+is now a derivation from confirmed geometry rather than a borrowed
+assumption. Recorded as `geometry.arm_angle_deg: 45.0`.
+
+With both the arm angle and the datum resolved, the full 3-D motor
+coordinates are now written into **`motors.positions_body_m`** — the field
+`mjcf_builder.py` actually consumes (FRD, +y right so left is −y):
+
+```
+FL [+a, −a, −0.093]    FR [+a, +a, −0.093]
+RL [−a, −a, −0.093]    RR [−a, +a, −0.093]
+```
+
+The interim `provisional_geometry:` block was **removed**, not renamed:
+keeping motor XY in two places would have created exactly the drift its own
+test was written to prevent. The drift guard survives in stronger form —
+tests recompute XY from `arm_length_m` + `arm_angle_deg` and compare against
+the stored positions, so there is one source of truth.
+
+`[CAUTION]` `tarot680b_reference.yaml` is untouched. Its ±45° assumption
+remains an explicitly-tagged, low-confidence statement about a *different*
+airframe and must not be cited as evidence about this vehicle.
+
+### 0.11.3a `[CAUTION]` "arm length" vs "wheelbase" vs "a" — naming trap
+
+Three different lengths are in play and the repository's names for them are
+already muddled. For this vehicle:
+
+| Quantity | Value | Meaning |
+|---|---|---|
+| `geometry.arm_length_m` | 0.360 m | **center → motor center** (what was measured) |
+| `geometry.wheelbase_m` | null | opposite-motor span = 0.720 m, now derivable from the confirmed symmetry — but deliberately **left null**, see below |
+| `a` (the x/y component) | 0.2546 m | = `arm_length_m`/√2; **confirmed** since 2026-09-16, no longer an assumption |
+
+The 0.360 m figure is consistent with how `tarot680b_reference.yaml` uses
+`arm_length_m` (it sets `arm_length_m = wheelbase/2 = 0.3685`), so the
+semantics match. But **MUJOCO_MODEL.md §D calls `a = wheelbase/(2√2)` the
+"radial distance"**, which is wrong — `a` is the x/y *component*; the radial
+distance is `wheelbase/2`. Anyone applying §D's formula with 0.360 as a
+"wheelbase" would get `a = 0.127 m`, off by a factor of 2.
+
+`[DECISION — 2026-09-16]` `wheelbase_m` stays `null` even though it is now
+derivable. `x500_shell._target_wheelbase_from_physical_params` already
+derives the 0.720 m span from `positions_body_m` (max pairwise horizontal
+distance) whenever `wheelbase_m` is absent, so storing a literal would only
+create a second source that can disagree with the positions. A test
+(`test_opposite_motor_span_derives_to_720mm`) pins that derivation, and
+`test_arm_length_is_radial_not_diagonal` pins the radius interpretation.
+
+`[TODO]` Fix MUJOCO_MODEL.md §D's wording (root-level file, out of this
+session's write scope — see the §9 entries).
+`[RESOLVED — 2026-09-19]` Done in a documentation-only pass the user
+explicitly authorized: `MUJOCO_MODEL.md` §D now defines `R` (radial distance,
+0.360 m) and `a = R/√2` (x/y component, 0.2545584412271571 m) separately and
+carries a correction note. The full rewrite is listed in the 2026-09-19 §9
+entry's follow-up.
+
+### 0.11.4 `[FACT]` Current parameter ownership (audit, 2026-09-16)
+
+| Item | Owner | Note |
+|---|---|---|
+| mass, CG, inertia, geometry, motor position/direction, thrust limits, motor/ESC/prop/battery metadata | `landing_mujoco/configs/*.yaml` via `param_schema.py` | the only structured owner |
+| (no vehicle physical parameters at all) | `system_id/`, `mujoco_rl/` | verified by grep: **zero** references to `param_schema`/`landing_mujoco`. `system_id/` holds ULog signal schemas only; `mujoco_rl/env_prototype.py` duplicates the mass-normalized `LandingConfig` fields |
+| (no vehicle model) | `models/`, `px4/`, `px4_assets/` SDF/URDF | other projects' airframes (X8 VTOL, mono_cam); **no** SDF/URDF/MJCF describes the UGRP vehicle |
+| mass-normalized thrust limits | `landing_rl/envs/landing_env.py` `LandingConfig` | `max_thrust_accel_mps2 = 1.80·9.8065`, `min_thrust_accel_mps2 = 0.25·9.8065` — accelerations, **not** forces |
+| gravity (RL/analytical) | `LandingConfig.gravity_mps2 = 9.8065` | |
+| gravity (MuJoCo) | hardcoded `9.80665` in `actuation_model.py`, `mjcf_builder.py` MJCF, several tests | |
+
+`[FACT]` **`landing_rl` legacy dynamics contains no mass, inertia, CG or
+geometry at all** — it is mass-normalized throughout (thrust is carried as
+`thrust_accel` in m/s²). This is why recording real mass/geometry cannot
+change legacy behavior, and why connecting them later is a deliberate,
+separate physics change.
+
+`[OPEN]` **Duplicate/inconsistent gravity constant**: `landing_rl` uses
+9.8065, `landing_mujoco` hardcodes 9.80665. Pre-existing, recorded here,
+deliberately **NOT** reconciled — changing either is a behavior change
+requiring its own regression pass. At 6.408 kg the two differ by 0.0009 N in
+hover thrust (immaterial), but they should be unified under one owner
+eventually.
+
+`[OPEN]` The canonical vehicle-parameter source currently lives **inside
+`landing_mujoco/`**, while the target architecture has analytical/SI and
+MuJoCo consuming one shared source. `landing_rl/configs/vehicle/` exists but
+is an **empty, untracked placeholder** (no files in `git ls-files`).
+`[PROPOSAL]` (not approved) promote the parameter source to a
+backend-neutral location once a second consumer actually exists — premature
+today.
+
+### 0.11.5 `[CURRENT — 2026-09-19]` Measured inertia → compiled MuJoCo model
+
+**Data flow (verified by reading the code and by inspecting a compiled
+`mjModel`):**
+
+```
+ugrp_vehicle_measured.yaml
+  → param_schema.load_uav_params(validate=False)       [parse only; no logic changed]
+  → mjcf_builder.build_mjcf(params, physics_dt=…)      [one explicit <inertial> at the CG]
+  → mujoco.MjModel.from_xml_string(xml)
+  → body_mass / body_inertia / body_ipos / body_iquat / geom_pos (motor markers)
+```
+
+| YAML field | Reaches compiled `mjModel`? | As |
+|---|---|---|
+| `mass_properties.mass_kg` | **yes** | `body_mass[vehicle]` = 6.408 |
+| `mass_properties.inertia_kgm2.{ixx,iyy,izz}` | **yes** | `body_inertia[vehicle]` = [0.153184, 0.126285, 0.14905] |
+| `mass_properties.cg_body_m` | implicit | inertial `pos="0 0 0"` — the body origin **is** the CG (`body_ipos` = 0, `body_iquat` = identity) |
+| `motors.positions_body_m` | **yes**, markers only | `arm_*` / `motor_*` geoms, FRD→FLU via `frd_vector_to_mujoco_body`; massless, collision-disabled |
+| `geometry.landing_gear_points_body_m` | **yes** (fourth pass) | four PHYSICAL contact points DERIVED from skid length 0.300 / spacing 0.310 under a CENTERED_SYMMETRY_ASSUMPTION; read as `physical_contact`, turned into `leg_0..leg_3` sphere centres (`z − 0.020`, i.e. 0.221) by the builder; FRD→FLU via the repository helper |
+| `geometry.ground_clearance_m` (0.241) | not into the MJCF | PHYSICAL; only the fallback `r_landing^B = [0, 0, 0.241]` of `landing_reference_point_body_m()` reads it; creates no geom |
+| gear sphere radius 0.020 / centre offset 0.221 | builder only | SIMULATION / DERIVED — `LEG_CONTACT_RADIUS_M`, `landing_gear_sphere_centers_body_m()`; never in a physical YAML |
+| `mass_properties.meta.*` (inertia provenance, products, included hardware) | no | record-only |
+| `battery.position_body_m`, `motors.spin_directions`, `raw_measurements`, component specs | no | record-only |
+| `thrust.*`, `identified_response.*` | not needed for the MJCF; **required** by `IdentifiedWrenchActuation` | still `null` |
+
+**Mass / inertia ownership — no double counting.** `mass_kg` and `Ixx/Iyy/Izz`
+were measured on the full flight configuration, so they already contain
+battery, ballast brick, motors, ESCs, frame, electronics, landing gear and
+wiring. MuJoCo therefore carries **exactly one** inertial body:
+`vehicle`, mass 6.408, principal inertia = the measured diagonal, an explicit
+`<inertial>` element (which makes MuJoCo ignore geom-derived mass). Every
+child geom (markers, x500 visual shell) is massless. Component masses
+(`battery.mass_kg`, `motors.mass_kg_each`) stay `null` and are never added.
+Verified on the compiled model: `Σ body_mass` = `mj_getTotalmass` = 6.408,
+exactly one non-zero-mass body, and enabling the x500 visual shell (31 geoms
+vs 9) leaves `body_mass/inertia/ipos/iquat/subtreemass` bit-identical.
+
+**Compiled `mjModel` readout** (`physics_dt` 0.002, gravity `[0,0,−9.80665]`):
+`body_mass[vehicle]` = 6.408 · `body_inertia` = [0.153184, 0.126285, 0.14905] ·
+`body_ipos` = [0,0,0] · `body_iquat` = [1,0,0,0] · motor markers (FLU) at
+(±0.2545584412271571, ±0.2545584412271571, +0.093), radius 0.360 m to machine
+precision, FRD round-trip recovering the YAML literals. MuJoCo did not
+modify the tensor: the `<compiler>` carries only `angle="radian"` (no
+`balanceinertia` / `boundmass` / `boundinertia` / `inertiafromgeom`), and the
+triangle inequalities hold with margin (0.153184 ≤ 0.275335;
+0.126285 ≤ 0.302234; 0.149050 ≤ 0.279469).
+
+**Inertia measurement (bifilar, manual stopwatch, recorded 2026-09-19).**
+Full raw periods, D/L per axis and statistics are in
+`mass_properties.meta.inertia_kgm2` and are re-reduced by tests.
+
+| Axis | D [m] | L [m] | n | T_mean [s] | mean [kg·m²] | sample std | sample var |
+|---|---|---|---|---|---|---|---|
+| Ixx (roll) | 0.090 | 0.427 | 10 | 4.50433 | 0.153184 | 0.004362 | 1.903e-5 |
+| Iyy (pitch) | 0.185 | 0.424 | 10 | 1.98267 | 0.126285 | 0.003041 | 9.246e-6 |
+| Izz (yaw) | 0.163 | 0.505 | 9 | 2.66815 | 0.149050 | 0.001698 | 2.884e-6 |
+
+Yaw outlier: the 8.48 s trial was judged an outlier candidate by the user and
+excluded (n = 9); it is preserved in the YAML, and including it would give
+0.150874 / std 0.005984 (n = 10). Canonical Izz is the excluded value.
+Uncertainty is **recorded only** — not wired into any randomization.
+
+`[FACT]` Reproduction check: `I = m·g·D²·T²/(16π²L)` with T = total/3, then
+the **mean of per-trial I** (not I at the mean period), reproduces all
+reported means, stds, variances and the with-outlier Izz **exactly at
+g = 9.8065**. The user did not state g; 9.8065 is *inferred* (it equals
+`LandingConfig.gravity_mps2`). The MuJoCo constant 9.80665 would move Ixx by
++3e-6. The canonical values are the user's literals, not recomputed.
+
+`[CAUTION]` What this does NOT establish:
+  * The off-diagonal products are an assumption, not a measurement. Frame
+    trap for any future use: FRD→FLU (`diag(1,−1,−1)`) leaves diagonal terms
+    unchanged but flips `Ixy`, `Ixz`; the builder passes `diaginertia`
+    through unconverted, which is only valid for a diagonal tensor.
+  * `Ixx/Iyy ≈ 1.21` on a nominally symmetric X-frame. `[INTERPRETATION]`
+    the ballast brick (0.09 × 0.21 × 0.06 m, long in y *if* those are body
+    axes) points the same way, but no evidence shows it explains the gap.
+    Not adjusted toward symmetry.
+  * R² is N/A (manual stopwatch); confidence is tagged `medium`, not `high`.
+  * The measured MJCF has **no ground-contact geoms** (gear geometry
+    unknown), so free-fall through the ground plane is expected and contact
+    behavior with this vehicle is untested.
+  * Force-level checks (free fall = −g, hover-equivalent force m·g ⇒ zero
+    acceleration, torque τ ⇒ α = τ/I per axis, inertia bound to body axes)
+    prove the wiring, **not** that the real vehicle can produce that
+    thrust: `max_collective_thrust_n` is UNKNOWN. Hover thrust m·g =
+    62.8401 N (g = 9.8065) / 62.8410 N (g = 9.80665), 15.71 N ≈ 1.602 kgf per
+    motor under an equal-sharing assumption — DERIVED, not a maximum.
+
+`[OPEN]` `MuJoCoDynamics(params)` cannot be constructed from the measured
+config. `[CORRECTION — 2026-09-19, third pass]` This used to be two
+independent reasons; the first is gone: `landing_reference_point_body_m()` no
+longer raises (`ground_clearance_m = 0.241` ⇒ `[0, 0, 0.241]`, x/y assumed
+centred). What remains is `IdentifiedWrenchActuation.__init__`, which requires
+`thrust.max_collective_thrust_n` and `identified_response.tau_*` / `delay_s`
+(with `validate=False` it stops with a `TypeError` on `float(None)`; with
+validation `load_uav_params` raises `MissingMeasurementError` first).
+`_REQUIRED_FIELDS` was deliberately **not** relaxed.
+
+### 0.11.6 `[CURRENT — 2026-09-19, fourth pass]` Skid-type landing gear footprint
+
+`[FACT]` The real gear is two continuous parallel skid bars along body X.
+`[USER_CONFIRMED]` skid effective length **0.300 m**, centre-line spacing
+**0.310 m**; `[MEASURED]` CG → ground **0.241 m**. `[DERIVED]` half length
+0.150 m, half spacing 0.155 m. `[MODELLING ASSUMPTION]` the footprint is centred
+and symmetric about the CG in x and y (`CENTERED_SYMMETRY_ASSUMPTION`) — the
+actual per-leg offset from the CG was **not** measured.
+
+Recorded in `landing_gear_points_body_m` as PHYSICAL contact points (FRD, +Y
+right; order left-front, left-rear, right-front, right-rear; z = 0.241):
+`[+0.150, −0.155]`, `[−0.150, −0.155]`, `[+0.150, +0.155]`, `[−0.150, +0.155]`.
+`[CAUTION]` These four coordinates are **not** "fully measured point
+coordinates": provenance is `DERIVED_FROM_MEASURED_DIMENSIONS` +
+`CENTERED_SYMMETRY_ASSUMPTION`.
+
+`[FACT]` Compiled MuJoCo geometry (existing conversion path, no builder change):
+four collision spheres of radius 0.020 m, centres in FLU
+`[+0.150, +0.155, −0.221]`, `[−0.150, +0.155, −0.221]`,
+`[+0.150, −0.155, −0.221]`, `[−0.150, −0.155, −0.221]`; sphere bottoms at
+z = −0.241. The 0.221 is derived by `landing_gear_sphere_centers_body_m()`, never
+stored. **Limitation:** two continuous bars are approximated by four endpoint
+spheres — a deliberate v0 simplification, not a line-contact model; a
+capsule/cylinder skid is a possible future change, not done.
+
+### 0.12 `[CURRENT — 2026-09-25]` RL Baseline v0.1 packaging
+
+`[DECISION — as stated in the user's 2026-09-25 session brief]` Scope of the pass: make the repository a first
+reproducible team baseline WITHOUT changing research behaviour (no reward / PID / observation / action / randomization /
+physics change, no retraining, no checkpoint regeneration, no landing_mujoco redesign, no merge, no push).
+Baseline of record as stated there: canonical environment `landing_rl/envs/landing_env.py`; contract 16-D obs / 3-D
+normalized residual action (XY ±0.25 m/s, Z ±0.05 m/s) at 20 Hz; model generation of record
+`ppo_landing_residual_v4_stage2_contact_final.zip` + `vecnormalize_v4_stage2_contact.pkl`; main evaluation scripts
+`eval_compare_v2.py` and `eval_robustness_paper.py`.
+
+`[FACT]` Commits created (local, on `refactor/landing-rl-architecture`, on top of `6306699`):
+
+| commit | content |
+|---|---|
+| `6c4fd81` | measured UGRP parameters (`param_schema.py`, `ugrp_vehicle_measured.yaml`), MJCF injection (`mjcf_builder.py`), `test_ugrp_measured_params.py`, `test_measured_mjcf_injection.py`, `test_param_schema.py` update |
+| `a666ab8` | `MUJOCO_MODEL.md` rewrite (documentation) |
+| `7d65074` | `landing_rl/evaluation/artifacts.py`; CLI + CWD-independent paths for `eval_compare_v2.py` / `eval_robustness_paper.py`; test gate without machine paths; `eval_env_stage0.py` pairing fix + DEPRECATED; `plot_trajectory.py` DEPRECATED |
+| `b633024` | `BASELINE.md`, `MODEL_ARTIFACTS.md` |
+| `9dd5563` | `requirements.txt`, README quickstart, `landing_rl/evaluation/smoke.py`, `smoke_test.py` |
+| (this file) | `PROJECT_HANDOVER.md` |
+
+`MUJOCO_LOG.TXT` (GLFW "could not create window" log from the viewer crash) is a debug artifact and was deliberately
+NOT committed; it is still untracked in the working tree.
+
+`[FACT]` Evaluation interface now: `--policy {all,pid,random,ppo}` (`eval_compare_v2`), `--policy {all,pid}`
+(`eval_robustness_paper`), `--model`, `--vecnorm` (`--vecnormalize` kept as an alias). Defaults resolve independent of
+the working directory: `$UGRP_RL_ARTIFACT_DIR`, else `<repo>/mujoco_rl/runs`; results default to
+`mujoco_rl/runs/paper_eval`, never the artifact directory. PID / random need no artifacts. Checkpoint gate
+(`test_checkpoint_compatibility.py`) reads the same location; without artifacts it skips with a message naming the
+files, and `UGRP_RL_REQUIRE_ARTIFACTS=1` makes that a failure.
+
+`[FACT]` NON-REGRESSION. (a) Nothing under `landing_rl/{envs,controllers,dynamics,perception,contact,disturbances}`,
+`landing_mujoco/{dynamics,envs,coordinates}`, `mujoco_rl/envs` or the three `train_*.py` scripts changed; the
+`make_config()`, `COMMON_CONFIG`, `CASE_OVERRIDES` and statistics helpers in the eval scripts are AST-identical to
+`HEAD`. (b) With the pair of record on this machine (Python 3.10.12, numpy 2.2.6, gymnasium 1.3.0, SB3 2.9.0, torch
+2.12.1, mujoco 3.4.0): the `eval_compare_v2` output (PID 190/200, random 183/200, PPO 191/200, seeds 5000-5199) is
+identical to the archived `eval_compare_v2_paper_200ep.txt`, and `robustness_summary.csv`,
+`robustness_episodes.csv`, `robustness_paired_pid_vs_ppo.csv` (seeds 7000-7199) are BYTE-IDENTICAL to the archived
+2026-08-31 files (archive hashes in `MODEL_ARTIFACTS.md`). PID-only was also reproduced (190/200) with no artifacts
+present from a different working directory.
+
+`[FACT]` TESTS (unittest, the README commands; artifacts supplied via `UGRP_RL_ARTIFACT_DIR`, strict mode on):
+`landing_rl` 238 tests OK in 190 s; `landing_mujoco` 221 OK in 55.7 s; `system_id` 67 OK in 8.8 s -- 526 tests,
+0 failures, 0 errors, 0 skipped. Without artifacts (fresh-clone behaviour) `landing_rl` runs 233 tests and reports 1
+class-level skip (the 5 checkpoint-gate tests). The 238 = 218 previous + 17 (`test_evaluation_artifacts.py`) + 2
+(`test_smoke.py`) + 1 (`test_C_canonical_eval_scripts_use_pair_of_record`). `system_id` integration tests that need
+the git-ignored sample ULogs would skip on a fresh clone (count NOT VERIFIED). `requirements.txt` resolves in a
+fresh venv (`pip install --dry-run`); the config-loading suites also pass on PyYAML 6.0.3 (159 tests); an actual
+from-scratch install was NOT performed.
+
+`[FACT — new, from artifact metadata]` TRAINING LINEAGE. `num_timesteps` of `v3_stage1`, `v3_stage1_rewardfix1` and
+`v3_stage2_contact` are all exactly 1,515,520 (stage 0 = 507,904 + one 1M-step run each) and all three VecNormalize
+files have `obs_rms.count` 1,515,528; `v4` is 2,523,136 / 2,523,148. The `target_valid` mean of each VecNormalize
+gives the invalid-target fraction seen while training: stage 0 0.0%, stage 1 1.0%, stage 1 rewardfix1 1.0%, stage 2 v3
+5.0%, v4 5.0% (from stage 2 v3, script-confirmed). `[INTERPRETATION]` stage 2 v3 was branched from stage 0, not from
+stage 1: the three v3 checkpoints are sibling branches, not a chain. There is no script for stage 0 or for stage 2 v3.
+
+`[CORRECTION — 2026-09-25]` §4 above states that the stage-0 configuration "is only recoverable via
+`mujoco_rl/eval_env_stage0.py :: make_config()`" and orders the checkpoints as a chain. Corrected: that `make_config()`
+has 1% target dropout, equal to the STAGE-1 training configuration (`train_ppo_v3_long.py`); stage 0's VecNormalize
+saw no invalid target at all, so the stage-0 training configuration is UNKNOWN. The order stage 1 -> rewardfix1 -> stage
+2 in the §4 table is not supported by the artifacts (see the lineage above). The original §4 text is kept.
+
+`[RESOLVED — 2026-09-25]` §7 items 6 (`eval_env_stage0.py` model/VecNormalize mismatch) and 8 (README branch pointer):
+the stage-1 model is now paired with the stage-1 VecNormalize saved with it by `train_ppo_v3_long.py` (script-confirmed;
+the script is also marked DEPRECATED and warns at run time), and the README branch note was replaced.
+`plot_trajectory.py` (loads `./runs/ppo_landing_residual`, no VecNormalize, default `LandingConfig()`) was NOT repaired
+because no correct historical pair can be established; it is marked DEPRECATED. Neither is a baseline tool.
+
+`[CAUTION]` What this pass does NOT establish: the reference result is a reproducibility statement, not a performance
+claim -- in the archived evaluation every paired PID-vs-PPO McNemar p-value is >= 0.125 and the dominant failure for
+both is `excessive_bounce`. The simulated PID (`kp_xy 0.45, kd_xy 0.18, kp_z 0.35, kd_z 0.12`, no integral) is not the
+deployed ROS2 controller (`precision_landing_controller.py`: kp 0.35/0.35/0.22, ki 0.008/0.008/0.003, kd
+0.16/0.16/0.10, output limits 0.8/0.8/0.35, deadband, derivative filter, slew limit, target EMA filter). The trained
+policy has never run in the measured MuJoCo model (which cannot be constructed from the measured set), and no PPO
+inference / deployment code exists under `ros2/`, `jetson/` or `px4/`.
+
+`[OPEN]` (1) The model artifacts have no shared hosting; the files exist only in the maintainer's local
+`drone_stack/mujoco_rl/runs/`. (2) Stage 0 and stage 2 v3 training scripts are missing; training is unseeded and the
+train scripts still use `./runs` relative to the working directory. (3) Whether `main` or `refactor/landing-rl-architecture`
+is the team baseline branch is undecided; README states the RL baseline is NOT on `main`. (4) The 6 local commits above
+plus this handover commit are unpushed.
+
+`[TODO]` User approval, then push (never force). Decide artifact hosting. Decide whether to reconstruct or record as lost
+the stage-0 / stage-2-v3 scripts. Document how each of the 16 observations is produced on the vehicle.
 
 ---
 
@@ -708,13 +1270,14 @@ as intentional-but-dead-code rather than a live bug):
 6. **`eval_env_stage0.py` mismatches checkpoint and VecNormalize stage** —
    loads `vecnormalize_v3_stage0.pkl` (stage0 statistics) but
    `ppo_landing_residual_v3_stage1_final.zip` (a stage1 checkpoint) in
-   `main()`.
+   `main()`. `[RESOLVED — 2026-09-25, commit 7d65074]` now paired with `vecnormalize_v3_stage1.pkl`;
+   script marked DEPRECATED (§0.12).
 7. **Misleading parameter name, acknowledged in-code**:
    `process_noise_vel_std_mps` is consumed as an *acceleration*-noise
    standard deviation, not a velocity-noise one; the module's own docstring
    states the name is kept only for RNG-stream compatibility
    (`landing_rl/dynamics/process_noise.py:29-32`).
-8. **`README.md` branch pointer is stale** — states *"Current working
+8. `[RESOLVED — 2026-09-25, commit 9dd5563]` **`README.md` branch pointer is stale** — states *"Current working
    branch: orange-fix"* (`README.md:5-9`); the actual checked-out branch this
    session is `refactor/landing-rl-architecture`.
 9. **`landing_rl/configs/{environment,training,vehicle}/` are empty** — no
@@ -1788,3 +2351,868 @@ Real vehicle parameter measurement / injection — not additional
 visualization work. Recommended order: mass → CG → inertia → motor positions
 → landing-gear geometry → max collective thrust → roll/pitch/thrust response
 identification → actuator delay → real-flight vs MuJoCo validation.
+
+---
+
+### 2026-09-14 (continued) — interactive MuJoCo viewer SIGSEGV on WSLg: native GPU-driver fault, no repository change
+
+Scope: inspection/diagnosis only, requested by the user so they could
+visually inspect the x500 model themselves. No source, config, asset, model,
+dependency or package was changed; nothing was committed. Evidence files
+(matrix log, gdb backtraces, offscreen PNGs) lived only in the session
+scratchpad and are NOT preserved; the key facts are transcribed here.
+
+CONTEXT (user report)
+  * An earlier GLX-context failure was cleared by the user removing
+    `LIBGL_ALWAYS_INDIRECT=1` from their shell. After that,
+    `python3 landing_mujoco/tools/view_x500_visual.py --pose ground
+    --physics-overlay` printed the shell summary and
+    `settled: ground_contact=True touchdown_quality=soft success=True
+    z_error=0.0200 altitude_agl=0.0200`, then died with
+    `Segmentation fault (core dumped)` and no Python traceback.
+
+`[FACT]` Crash location (code reading + faulthandler + gdb):
+  * Without `--offscreen`/`--rollout`, `view_x500_visual.py:147` calls
+    `mujoco.viewer.launch(model, data)` → `viewer.py:525`
+    `simulate.render_loop()` (native `_simulate` module, main thread; the
+    physics side thread was at `viewer.py:315` `simulate.load`).
+  * gdb, main thread at crash time: `_simulate.so` → GLFW
+    `glfwSwapBuffers`/`swapBuffersGLX` → `libGLX_mesa.so.0` → Mesa DRI
+    driver, i.e. the first frame swap.
+  * gdb, faulting thread (a driver worker thread, not a Python thread):
+    `libd3d12core.so` → `libigd12um64xel.so` → `libigc.so` →
+    `libLLVM-9.so` (`llvm::FPPassManager::runOnFunction`) → `libigc.so` →
+    `libstdc++.so.6` `std::string::_M_assign` (SIGSEGV). Intel driver files
+    loaded from
+    `/usr/lib/wsl/drivers/iigd_dch.inf_amd64_77ca5c827a04e39b/`.
+  * Not implicated: geom-group setup, camera setup, data sync, or any
+    repository callback.
+
+`[FACT]` A–F isolation matrix (all with `LIBGL_ALWAYS_INDIRECT` unset,
+`/usr/bin/python3 -X faulthandler`, 40 s SIGKILL timeout). Every case printed
+a faulthandler `Fatal Python error: Segmentation fault` dump:
+
+| case | flags | SIGSEGV dump | exit code |
+|---|---|---|---|
+| A | (none) | yes, +7.4 s | 139 |
+| B | `--pose ground` | yes, +14.3 s | 139 |
+| C | `--physics-overlay` | yes, +5.5 s | 137 |
+| D | `--pose ground --physics-overlay` | yes, +4.3 s | 139 |
+| E | `--no-visual` | yes, +4.5 s | 139 |
+| F | `--no-visual --pose ground` | yes, +5.5 s | 139 |
+
+  Observation: exit code is not a reliable crash marker here — WSL crash
+  capture (`core_pattern = |/wsl-capture-crash …`) kept the process alive for
+  >20 s after the fault, so C was SIGKILLed (137) before it could exit 139.
+  The faulthandler dump is the reliable signal.
+
+`[FACT]` Offscreen rendering (repo script, case-D flags, `--offscreen` to a
+scratch dir):
+  * default backend (GLFW) and `MUJOCO_GL=egl`: SIGSEGV at
+    `mujoco/renderer.py:89` (`MjrContext` creation), rc 139, no PNG.
+  * `MUJOCO_GL=osmesa`: rc 0, 9 s, wrote `D_{iso,top,front,side}.png`; the
+    iso render shows the x500 shell, placeholder overlay markers and
+    physical contact geoms.
+
+`[FACT]` Repository code excluded:
+  * A trivial inline plane + free box MJCF (no `landing_mujoco` / `landing_rl`
+    import) also segfaults in `mujoco.viewer.launch()`, and in offscreen
+    `mujoco.Renderer` with default/EGL backends (`renderer.py:243`); gdb on
+    the EGL case shows the same Intel `libigd12um64xel.so` / `libigc.so` /
+    `libLLVM-9.so` → `libstdc++` chain. OSMesa renders it (rc 0).
+  * `glxgears -info` on the default adapter reports
+    `GL_RENDERER = D3D12 (Intel(R) Iris(R) Xe Graphics)` and then dumps core
+    (rc 139). `glxinfo -B` succeeds only because it never draws.
+  * `dmesg`: `python3: potentially unexpected fatal signal 11`, followed by
+    `WSL (… CaptureCrash): Capturing crash for pid …`. `ulimit -c` = 0;
+    `coredumpctl` not installed; gdb used live instead.
+
+`[FACT]` Graphics environment at diagnosis time:
+  * `DISPLAY=:0`, `WAYLAND_DISPLAY=wayland-0`, `XDG_RUNTIME_DIR=/run/user/1000/`,
+    `MUJOCO_GL` unset, `LIBGL_ALWAYS_SOFTWARE` unset.
+  * `LIBGL_ALWAYS_INDIRECT=1` is still exported by `~/.bashrc:120`, so every
+    new shell re-inherits it; with it set, `glxinfo -B` fails with
+    `BadValue … X_GLXCreateNewContext`. With it unset: direct rendering Yes,
+    accelerated, `D3D12 (Intel(R) Iris(R) Xe Graphics)`, OpenGL 4.1 core,
+    Mesa `23.2.1-1ubuntu3.1~22.04.4`.
+  * Versions: Python 3.10.12 (`/usr/bin/python3`, no venv); MuJoCo 3.4.0,
+    pyGLFW 2.10.0 (bundled `glfw/x11/libglfw.so`, native
+    `3.4.0 X11 GLX Null EGL OSMesa`), PyOpenGL 3.1.10 — all in
+    `~/.local/lib/python3.10/site-packages`; Mesa packages
+    (`libgl1-mesa-dri`, `libglx-mesa0`, `libegl-mesa0`, `libosmesa6`)
+    23.2.1-1ubuntu3.1~22.04.4; WSL 2.5.9.0, kernel 6.6.87.2-1, WSLg 1.0.66,
+    Direct3D 1.611.1, Windows 10.0.26200.9168.
+  * Host GPUs (Windows `Win32_VideoController`): Intel Iris Xe, driver
+    `31.0.101.4032`, dated 2022-12-21 (Mesa D3D12 default adapter);
+    NVIDIA GeForce RTX 3050 4GB Laptop GPU, driver `32.0.15.9579`,
+    dated 2026-03-04.
+
+`[INTERPRETATION]` Classification: **native graphics-stack bug (GLFW/WSLg/
+OpenGL layer), specifically the Intel D3D12 user-mode driver's shader
+compiler crashing on the first real draw**. Not a repository/model bug, not
+an x500 asset bug, not a physics-overlay bug, not a MuJoCo-viewer bug. The
+2022-12-21 Intel driver age is the most likely contributing factor; the exact
+internal mechanism (driver bug vs. C++-runtime interaction) is NOT VERIFIED.
+Confidence: high that the repository is not the cause and that the fault is
+Intel-adapter-specific; low on the internal mechanism.
+
+WORKAROUND PROBES (per-command environment variables only; nothing installed)
+  * `MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA`: `glxinfo -B` renderer
+    `D3D12 (NVIDIA GeForce RTX 3050 4GB Laptop GPU)`; `glxgears` 146 frames in
+    5.0 s (≈29 FPS; not investigated); trivial `launch()` and repo case D ran
+    until SIGKILL at 20 s / 30 s with **no** SIGSEGV dump; trivial
+    `launch_passive()` loop (mj_step + `viewer.sync()` for 15 s) exited
+    normally, rc 0.
+  * `LIBGL_ALWAYS_SOFTWARE=1`: renderer `llvmpipe (LLVM 15.0.7, 256 bits)`;
+    `glxgears` ≈437 FPS; trivial `launch()` and repo case D: no SIGSEGV dump
+    until SIGKILL; trivial passive loop 15 s, rc 0.
+
+`[CAUTION]` What the probes do NOT prove:
+  * No human looked at any window; there is no frame-level evidence that the
+    x500 model renders correctly in the interactive viewer under either
+    workaround.
+  * The repo viewer (`view_x500_visual.py`, blocking `launch()`) was only
+    shown not to crash within 30 s; it was never run to a clean exit.
+  * Nothing here touches or validates mass, CG, inertia, motor positions,
+    landing-gear geometry, contact, visual scale, controllers, reward, or the
+    observation/action contract — all unchanged.
+
+`[CORRECTION]` (2026-09-14)
+  * Old statements: §9 "x500 visual shell" entry — "interactive GLFW viewer
+    could not be exercised in this headless session (`gladLoadGL error`)";
+    SESSION CLOSEOUT item 3 — "The interactive MuJoCo viewer was not
+    validated in the headless Claude environment (GLFW `gladLoadGL error`)".
+  * Corrected statement: in this diagnosis the Claude shell for this worktree
+    was NOT headless (WSLg `DISPLAY=:0`, `WAYLAND_DISPLAY=wayland-0`). The
+    interactive viewer has two independent local-environment failure modes,
+    neither of which is "no display": (1) with `LIBGL_ALWAYS_INDIRECT=1`
+    (inherited from `~/.bashrc:120`) GLX context creation fails; (2) with it
+    unset, SIGSEGV in the Intel Iris Xe D3D12 driver. Whether the earlier
+    `gladLoadGL error` was failure mode (1) is NOT VERIFIED (that session's
+    environment variables were not recorded). The status "interactive viewer
+    not validated" remains true.
+  * Evidence: this entry's environment check, glxinfo results, A–F matrix and
+    gdb backtraces.
+
+`[FACT]` Untracked `MUJOCO_LOG.TXT` at the repository root (mtime
+2026-09-14 17:10:46 +0900, content `ERROR: could not create window`). None of
+this entry's diagnostic runs reported that error (all ran with
+`LIBGL_ALWAYS_INDIRECT` unset and failed with SIGSEGV instead);
+`[INTERPRETATION]` it is left over from an earlier viewer attempt under the
+GLX-indirect setting. Left untouched.
+
+`[TODO]` (user-side, no repository change needed):
+  1. Remove or comment out `export LIBGL_ALWAYS_INDIRECT=1` at
+     `~/.bashrc:120` (otherwise every new terminal reintroduces the GLX error).
+  2. Open the viewer on the NVIDIA adapter and perform the pending visual
+     inspection, e.g.
+     `MESA_D3D12_DEFAULT_ADAPTER_NAME=NVIDIA python3
+     landing_mujoco/tools/view_x500_visual.py --pose ground --physics-overlay`
+     (fallback: `LIBGL_ALWAYS_SOFTWARE=1`). Record the visual feedback before
+     any model/visual change is considered.
+  3. `[PROPOSAL]` (not approved) Update the Windows Intel Iris Xe driver as a
+     longer-term fix; untested.
+
+`[OPEN]` §0.10 is unchanged: real UGRP parameter measurement remains the
+immediate next step; this diagnosis does not change the project state or
+the validated baseline (`landing_rl` 218 / `landing_mujoco` 85 /
+visualization 37 passed, recorded at `6306699`; not re-run in this
+diagnosis because no code changed).
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD
+`6306699871122cd985a3e35ebd1b93ce575aeaa4`; working tree: `PROJECT_HANDOVER.md`
+modified (this entry, §0.9 item, header), `MUJOCO_LOG.TXT` untracked
+(pre-existing). Nothing staged or committed. Not pushed.
+
+---
+
+### 2026-09-16 — first real UGRP vehicle measurements recorded (storage / provenance only, no physics)
+
+Scope: **parameter storage, provenance and validation only.** Explicitly out
+of scope and not touched: MuJoCo physics implementation, MJCF authoring,
+actuator/motor/thrust-curve modelling, `LegacyVehicleDynamics` and
+`InnerLoopCommandModel` equations, contact model, reward, PPO, VecNormalize,
+checkpoints. No inertia placeholder was injected into any physics path.
+
+`[FACT]` New measurements supplied by the user and recorded:
+mass 6.408 kg; motor radial distance (center→motor center) 0.360 m; motor
+spin layout FL/RR = CW, FR/RL = CCW on an X-frame; CG, motor-plane and
+battery-center z in a raw measurement datum (0.241 / 0.334 / 0.220 m);
+component model designations for motor (T-MOTOR MN501-S IP45 KV360), ESC
+(HOBBYWING Skywalker V2 60A), battery (Poly-Tronics 8th Gen 10000 mAh
+22.2 V 6S1P 75C+ XT90-S) and propeller (T-MOTOR MS1704). Full table with
+per-value provenance: §0.11.1.
+
+`[FACT]` Parameter-ownership audit. `landing_mujoco/configs/*.yaml` +
+`param_schema.py` is the only structured owner of mass/CG/inertia/geometry/
+motor/thrust/component data. **`landing_rl` legacy dynamics holds no mass,
+inertia, CG or geometry whatsoever** — it is mass-normalized (thrust carried
+as `thrust_accel`, m/s²). `mujoco_rl/envs/env_prototype.py` duplicates the
+same mass-normalized `LandingConfig` fields (legacy, read-only). No
+URDF/SDF/MJCF describes this vehicle (`models/`, `px4/` hold other
+projects' airframes). `landing_rl/configs/vehicle/` is an empty untracked
+placeholder. Details: §0.11.4.
+
+`[FACT]` Discrepancy found, **not** reconciled: gravity is 9.8065 in
+`landing_rl` (`LandingConfig.gravity_mps2`) and hardcoded 9.80665 in
+`landing_mujoco` (`actuation_model.py`, MJCF, tests). Reconciling either is
+a behavior change and was left alone. Recorded as `[OPEN]` in §0.11.4.
+
+`[FACT]` Discrepancy found: the measured spin layout (M1 CCW, M2 CW,
+M3 CCW, M4 CW under MUJOCO_MODEL.md §D's numbering) is the **inverse
+polarity** of `tarot680b_reference.yaml`'s assumed M1 CW, M2 CCW, M3 CW,
+M4 CCW — both preserve "diagonals match". No behavior impact: spin
+direction is consumed by no dynamics code (MUJOCO_MODEL.md §E). The
+reference config was **not** edited (different airframe, its value is an
+explicitly-tagged assumption).
+
+IMPLEMENTATION
+  * `landing_mujoco/configs/ugrp_vehicle_measured.yaml` — populated the
+    datum-independent measurements and component specs; added two new
+    blocks: `raw_measurements:` (as-measured numbers in the unresolved
+    datum, consumed by nothing) and `provisional_geometry:`
+    (derived-under-assumption motor XY). Added a provenance vocabulary
+    header (MEASURED / USER_PROVIDED_SPEC / DERIVED / NOT_MEASURED …).
+  * `landing_mujoco/configs/param_schema.py` — added `RawMeasurements` and
+    `ProvisionalGeometry` dataclasses + parsers, the
+    `motor_xy_from_radial_distance()` geometric helper, and a `_vec2`
+    parser. The two new `UAVPhysicalParams` fields are defaulted, so
+    `tarot680b_reference.yaml` (which omits both blocks) parses unchanged.
+    **`_REQUIRED_FIELDS` was deliberately not touched** — fail-fast
+    semantics are unchanged.
+  * `landing_mujoco/tests/test_ugrp_measured_params.py` — new, 29 tests
+    across 5 cases: measured values, derived values, unknowns-stay-unknown,
+    datum separation, and reference-config-unaffected. Provenance *tags*
+    are asserted too, so promoting an observation to MEASURED breaks a test.
+  * `landing_mujoco/tests/test_param_schema.py` — updated the two tests that
+    encoded "mass is still null".
+
+PHYSICAL / CONTROL MEANING
+Nothing is applied. The measured mass is recorded next to a mass-normalized
+simulator that does not consume mass; the MuJoCo path still refuses to load
+this config. Connecting real parameters to runtime physics is a separate,
+future, behavior-changing step.
+
+`[OPEN]` **Datum ambiguity is the blocking issue.** The three measured
+z-coordinates share one datum whose origin and +Z direction were not
+recorded, so `motor_z_relative_CG` is undetermined in sign — only
+`|motor_plane − CG| = 0.093 m` and `|CG − battery| = 0.021 m` are known.
+Six body-frame fields are held `null` and a test enforces it. See §0.11.2.
+
+`[OPEN]` The ±45° arm angle was **not** confirmed by any repository source,
+so the derived motor XY stays in `provisional_geometry:` and is not
+promoted into `motors.positions_body_m`. See §0.11.3.
+
+VALIDATION
+  * `python3 -m pytest landing_rl/tests landing_mujoco/tests -q`
+    → baseline measured at the START of this session, before any edit:
+    **303 passed** (218 landing_rl + 85 landing_mujoco) in 222.22 s,
+    matching the figure recorded at `6306699`.
+  * `python3 -m pytest landing_rl/tests landing_mujoco/tests system_id/tests
+    -q` → after this session: **399 passed** in 229.00 s
+    (218 landing_rl unchanged + 114 landing_mujoco [85 unchanged + 29 new]
+    + 67 system_id). **No test changed status from pass to fail.** The 29
+    new tests are all in `test_ugrp_measured_params.py`; the 2 edited tests
+    in `test_param_schema.py` still pass.
+  * `system_id/tests` was added to the final run to confirm independence;
+    it was not in the baseline command, so its 67 is a new measurement, not
+    a delta. Grep confirms `system_id/` and `mujoco_rl/` contain **zero**
+    references to `param_schema`/`landing_mujoco`, so this session's edits
+    could not reach them.
+  * `python3 -m landing_mujoco.check_parameter_set --parameter-set
+    ugrp_vehicle_measured` → still exits 1, now listing 10 missing fields
+    (`total_mass_kg` correctly dropped off; `Ixx/Iyy/Izz`,
+    `motor_positions_body_m`, `cg_body_m`, `max_collective_thrust_n`,
+    `tau_*`, `actuator_delay_s` remain).
+  * `--parameter-set tarot680b_reference` → still exits 0, unchanged
+    summary (mass 3.57 kg, T_max 70.02 N).
+
+`[CAUTION]` What this does NOT establish: nothing here validates the
+measurements themselves (no independent re-weigh, no CAD cross-check), the
+vehicle configuration at weighing is not recorded, the component specs are
+user-supplied rather than datasheet-verified, and no simulator has been
+shown to predict this vehicle's behavior.
+
+`[TODO]` In order:
+  1. Measure **Ixx / Iyy / Izz** (bifilar/trifilar pendulum or HELIX) and
+     enter them directly — `inertia_estimation_mode` stays `manual` so the
+     geometric auto-estimate can never fill them.
+  2. Define the raw measurement datum (origin + +Z direction), record it,
+     convert CG / motor-plane / battery into FRD, and flip
+     `raw_measurements.datum_status` to `RESOLVED`.
+  3. Measure the actual arm angles; only then promote motor XY into
+     `motors.positions_body_m`.
+  4. Separately, and only after 1–3: MuJoCo physical-model parameter
+     injection.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD
+`6306699871122cd985a3e35ebd1b93ce575aeaa4` (unchanged — nothing committed
+this session). Working tree: `PROJECT_HANDOVER.md` (this entry + §0.10/§0.11
++ header; **also still carrying the uncommitted 2026-09-14 viewer-diagnosis
+revision, which was preserved, not overwritten**),
+`landing_mujoco/configs/ugrp_vehicle_measured.yaml`,
+`landing_mujoco/configs/param_schema.py`,
+`landing_mujoco/tests/test_param_schema.py` modified;
+`landing_mujoco/tests/test_ugrp_measured_params.py` untracked (new);
+`MUJOCO_LOG.TXT` untracked (pre-existing). Nothing staged or committed.
+Not pushed.
+
+`[CAUTION]` CLAUDE.md §23 lists the default write scope as `landing_rl/`,
+`system_id/` and `PROJECT_HANDOVER.md`; `landing_mujoco/` postdates that
+list and is not in §22's protected-infrastructure set. This session wrote
+under `landing_mujoco/configs/` and `landing_mujoco/tests/` because the
+canonical vehicle-parameter source demonstrably lives there. Root-level
+`MUJOCO_MODEL.md` was **not** modified — its §H parameter table still
+describes only the provisional reference config. `[PROPOSAL]` (not
+approved) add a pointer from `MUJOCO_MODEL.md` §H to §0.11.
+
+---
+
+### 2026-09-16 (second pass) — coordinate blockers resolved; motor/CG/battery geometry promoted to confirmed body-frame values
+
+Scope: **parameter recording, schema, tests and documentation only** —
+unchanged from the first pass. No MuJoCo physics injection, no MJCF, no
+actuator/thrust model, no change to `LegacyVehicleDynamics`,
+`InnerLoopCommandModel`, contact, reward, PPO, VecNormalize or checkpoints.
+Ixx/Iyy/Izz were **not** filled with any placeholder.
+
+`[DECISION — user, 2026-09-16]` Both blockers raised by the first pass were
+resolved by the user:
+
+1. **Measurement datum defined.** The raw z-values are heights measured from
+   the **floor**, **+Z up**. Combined with the body frame being FRD (+Z
+   down) with origin at the CG, the conversion is
+   `z_body_FRD = cg_raw_z − raw_z`.
+2. **Frame symmetry confirmed.** The vehicle is an **exact symmetric 45°
+   X-frame**, R = 0.360 m ⇒ `a = R/√2 = 0.2545584412271571 m`.
+
+`[SUPERSEDED]` These two decisions supersede the first pass's `[OPEN]`
+items "datum ambiguity is the blocking issue" and "the ±45° arm angle was
+not confirmed" (see the preceding §9 entry, left intact as history) and the
+corresponding `[OPEN]`/`[CAUTION]` text formerly in §0.11.2 / §0.11.3, which
+have been rewritten in place per CLAUDE.md §9.
+
+`[FACT]` Promoted to confirmed body-frame values:
+
+| Field | Value (FRD) | Basis |
+|---|---|---|
+| `mass_properties.cg_body_m` | `[0, 0, 0]` | body origin **is** the CG; now reconciled, not a default |
+| `motors.positions_body_m` | FL `[+a,−a,−0.093]`, FR `[+a,+a,−0.093]`, RL `[−a,−a,−0.093]`, RR `[−a,+a,−0.093]` | XY from arm length + confirmed 45°; Z from the datum conversion |
+| `battery.position_body_m` | `[0, 0, +0.021]` | datum conversion |
+| `geometry.arm_angle_deg` | `45.0` | USER_CONFIRMED (new schema field) |
+
+PHYSICAL MEANING: motors sit **93 mm above** the CG (negative in FRD);
+the battery sits **21 mm below** it (positive in FRD).
+
+IMPLEMENTATION
+  * `landing_mujoco/configs/ugrp_vehicle_measured.yaml` — filled the three
+    body-frame fields; added `geometry.arm_angle_deg: 45.0`;
+    `raw_measurements` now carries `datum_status: RESOLVED`,
+    `datum_origin: floor`, `datum_up_axis: "+z_up"`,
+    `datum_resolved_date`, and its `unresolved_signs` block was **renamed**
+    `resolved_separations` (magnitudes kept, signs added) rather than
+    dropped, so the history stays legible. Raw values preserved verbatim.
+  * `landing_mujoco/configs/param_schema.py` — added
+    `Geometry.arm_angle_deg`; added the datum fields plus
+    `RawMeasurements.body_z_from_raw_height()`, the single definition of the
+    conversion, which **raises** rather than guessing if the datum is
+    unresolved or not `+z_up`. Kept the `abs_*` accessors as an independent
+    cross-check (they read the raw pair, so they can disconfirm a stored
+    body-frame magnitude; a signed accessor derived from the same conversion
+    could not). **Removed** `ProvisionalGeometry`, its parser, the
+    `provisional_geometry:` YAML block and the now-unused `_vec2` helper.
+  * `landing_mujoco/configs/param_schema.py` — also added `meta` to
+    `PropellerSpec`, `BatterySpec` and `ESCSpec` and wired it into their
+    parsers. `[CORRECTION]` those three dataclasses had **no** `meta` field,
+    so the propeller/battery/ESC provenance blocks written in the first pass
+    were being silently discarded at load time. Caught by a test asserting
+    the battery's provenance tag. The first pass's claim that every
+    populated value carries a provenance tag was true of the YAML but not of
+    the parsed object; it is now true of both.
+  * `landing_mujoco/tests/test_ugrp_measured_params.py` — 29 → 35 tests.
+    `DatumSeparationTest` became `DatumConversionTest`: the tests that
+    asserted "datum pending / fields null / arm angle unconfirmed" were
+    **inverted rather than deleted**, so the new invariant is pinned with the
+    same strength as the old one.
+  * `landing_mujoco/tests/test_param_schema.py` — the missing-field set
+    updated a second time (11 → 10 → 8).
+
+VALIDATION
+  * `python3 -m pytest landing_rl/tests landing_mujoco/tests system_id/tests
+    -q` → **405 passed** in 239.39 s, versus 399 at the end of the first
+    pass. No test changed status from pass to fail.
+  * Per-suite collection counts: **`landing_rl` = 218 — identical to the
+    session baseline**, which is the decisive evidence for UNCHANGED since
+    that is the suite covering the legacy dynamics, controller, contact and
+    reward. `landing_mujoco` 120 (85 unchanged + 35 in the new file),
+    `system_id` 67 (unchanged).
+  * `check_parameter_set --parameter-set ugrp_vehicle_measured` → still
+    exits 1, now listing **8** missing: `Ixx`, `Iyy`, `Izz`,
+    `max_collective_thrust_n`, `tau_roll_s`, `tau_pitch_s`, `tau_thrust_s`,
+    `actuator_delay_s`. `cg_body_m` and `motor_positions_body_m` correctly
+    dropped off.
+  * `--parameter-set tarot680b_reference` → still exits 0, unchanged.
+  * Explicitly re-verified that `load_uav_params()` still raises on the
+    measured config: `view_x500_visual.py` calls it **without**
+    `validate=False`, so populating `positions_body_m` did **not** open a
+    path for these numbers to reach MuJoCo. Missing inertia keeps that shut.
+
+`[CAUTION]` What this does NOT establish: the datum definition and frame
+symmetry are user assertions, not independently re-measured in this session;
+no CAD or metrology cross-check was performed; battery MASS is still
+unknown, so the battery position cannot yet contribute to an inertia
+estimate; and nothing here validates that any simulator predicts this
+vehicle's behavior.
+
+`[OPEN]` `geometry.wheelbase_m` deliberately left `null` — see the
+`[DECISION]` in §0.11.3a. `[OPEN]` `ground_clearance_m`,
+`landing_gear_points_body_m`, `frame_height_m` are NOT implied by the datum
+resolution and remain unmeasured.
+
+`[TODO]` In order:
+  1. Measure **Ixx / Iyy / Izz** (bifilar/trifilar pendulum or HELIX) and
+     enter them directly — `inertia_estimation_mode` stays `manual`, and a
+     test asserts it, so the geometric auto-estimate can never fill them.
+     This is now the ONLY geometry/mass blocker.
+  2. Separately, and only after 1: MuJoCo physical-model parameter
+     injection (a behavior change needing its own commit and regression
+     pass). `max_collective_thrust_n` and the identified response are still
+     required before that config will load.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD
+`6306699871122cd985a3e35ebd1b93ce575aeaa4` (unchanged — nothing committed).
+Working tree: `PROJECT_HANDOVER.md`,
+`landing_mujoco/configs/ugrp_vehicle_measured.yaml`,
+`landing_mujoco/configs/param_schema.py`,
+`landing_mujoco/tests/test_param_schema.py` modified;
+`landing_mujoco/tests/test_ugrp_measured_params.py` untracked (new);
+`MUJOCO_LOG.TXT` untracked (pre-existing). The 2026-09-14 viewer-diagnosis
+revision of this file is still carried, uncommitted and unmodified. Nothing
+staged or committed. Not pushed.
+
+### 2026-09-19 — measured mass / inertia / geometry injected into the MuJoCo rigid body (physical-inertia injection complete; propulsion calibration pending)
+
+Scope: **`landing_mujoco` MuJoCo physical-model parameters only.** No
+observation / action / reward / termination / perception / latency /
+`BaselineController` / PPO / VecNormalize / checkpoint / curriculum change,
+and `LegacyVehicleDynamics` is untouched. No propulsion or motor model was
+invented; nothing was tuned.
+
+`[FACT]` Working-tree state found at session start (all UNCOMMITTED, carried
+from the 2026-09-16 sessions — classified, none reverted): `M
+PROJECT_HANDOVER.md`, `M landing_mujoco/configs/{param_schema.py,
+ugrp_vehicle_measured.yaml}`, `M landing_mujoco/tests/test_param_schema.py`,
+`?? landing_mujoco/tests/test_ugrp_measured_params.py`, `?? MUJOCO_LOG.TXT`
+(pre-existing viewer log). Baseline: `landing_mujoco` 120 tests OK.
+
+`[FACT — user-provided, 2026-09-19]` Diagonal inertia by bifilar
+suspension on the full flight configuration: Ixx 0.153184, Iyy 0.126285,
+Izz 0.149050 kg·m² (per-axis D, L, raw periods, std, variance, n, and the
+8.48 s yaw outlier exclusion are recorded in the YAML; table in §0.11.5).
+`[USER_CONFIRMED]` the 6.408 kg total mass is the full flight configuration
+(battery, ~1.8 kg ballast brick, motors, ESCs, frame, electronics, landing
+gear, wiring), so **none of it may be added again**. `Ixy/Ixz/Iyz` recorded
+as `ASSUMED_ZERO_FOR_V0`; R² recorded as `N/A`.
+
+`[FACT]` Independent reproduction: recomputing from the raw periods with
+`I = m·g·D²·T²/(16π²L)` and averaging per-trial I reproduces every reported
+statistic exactly at g = 9.8065 (inferred, not stated by the user), and the
+with-outlier Izz (0.150874 / 0.005984). Recorded as provenance; the
+canonical values remain the user's literals.
+
+IMPLEMENTATION
+  * `landing_mujoco/configs/ugrp_vehicle_measured.yaml` — `ixx/iyy/izz`
+    filled; `meta.inertia_kgm2` rewritten `NOT_MEASURED → MEASURED`
+    (method, reduction, per-axis raw periods and statistics, outlier policy,
+    `r2: "N/A"`, `uncertainty_use: RECORDED_ONLY_NOT_WIRED_INTO_RANDOMIZATION`);
+    added `meta.inertia_products_kgm2` (`ASSUMED_ZERO_FOR_V0`) and
+    `meta.included_hardware` (ballast/battery, `contributes_*_to_mujoco:
+    false`); mass note updated; header/vocabulary updated; stale
+    hover-thrust rounding in the closing comment corrected (15.7102 N /
+    1.6021 kgf → 15.7103 N / 1.6020 kgf at g = 9.80665).
+    `inertia_estimation_mode` stays `manual`.
+  * `landing_mujoco/configs/param_schema.py` — **docstring only**. No schema
+    field or logic added: provenance lives in the free-form `meta` dict,
+    which nothing consumes. `_REQUIRED_FIELDS` deliberately NOT relaxed.
+  * `landing_mujoco/dynamics/mjcf_builder.py` — (1) comment documenting why
+    diagonal inertia needs no FRD→FLU conversion and that products would;
+    (2) motor/arm marker coordinates AND `leg_*` contact-geom coordinates now
+    use `_coord()`: the legacy 4-dp text when it is lossless, full-precision
+    `repr` otherwise. Without this the measured `a = 0.2545584412…` was
+    rounded to 0.2546 in the compiled model (radius 0.36006 m) — required by
+    the task's own "motor positions exactly matching" check. Markers are
+    massless and collision-disabled. The `leg_*` change is preventive: the
+    measured config has no gear points yet, but the touchdown reference reads
+    the full-precision Python array, so future measured gear must not be
+    silently rounded in the collision geoms (reference gear points are 4-dp
+    exact, so nothing changes today).
+    **Existing configs are byte-identical**: the reference-config MJCF hash
+    pin `PRE_VISUAL_PHYSICS_MJCF_SHA256` in `test_x500_visual_shell.py`
+    still passes unchanged. (A first draft using plain `repr` changed that
+    hash; it was replaced rather than re-pinning the freeze gate.)
+  * Tests: `test_measured_mjcf_injection.py` (new, 27) — compiled `mjModel`
+    vs YAML (mass, inertia, `body_ipos`/`body_iquat`, compiler attributes,
+    single `<inertial>`, single non-zero-mass body, shell adds no mass),
+    motor geometry (radius 0.360, z, 45°, uniqueness, FRD round-trip),
+    `_coord` and gear-coordinate precision (synthetic test point), and
+    force/torque-level sanity (free fall, hover-equivalent
+    force, τ→α = τ/I per axis, inertia bound to body axes). Plus
+    `test_ugrp_measured_params.py` 35 → 50 (inertia values, provenance,
+    raw-period re-reduction, outlier policy, ownership, YAML duplicate-key
+    guard) and `test_param_schema.py` updated (missing set 8 → 5). The
+    obsolete "inertia is still unmeasured" assertions were inverted or moved
+    into the new inertia test class, not silently deleted.
+
+PHYSICAL / CONTROL MEANING: the MuJoCo rigid body now has the real vehicle's
+mass and principal inertia about its CG. `landing_rl` (mass-normalized) does
+not consume any of it.
+
+VALIDATION
+  * `python3 -m unittest discover -s landing_mujoco/tests -t .` → **162 OK**
+    (baseline 120 + 42).
+  * `python3 -m unittest discover -s landing_rl/tests -p "test_*.py"` →
+    **218 OK**, unchanged (incl. the structural-freeze matrix).
+  * `python3 -m unittest discover -s system_id/tests -t .` → **67 OK**.
+  * Mutation check: swapping Ixx/Iyy in the builder made 5 tests fail;
+    reverted.
+  * Old-vs-new reference-config MJCF, compiled: no `mjModel` array differs.
+  * `check_parameter_set --parameter-set ugrp_vehicle_measured` → exit 1,
+    Missing: `max_collective_thrust_n`, `tau_roll_s`, `tau_pitch_s`,
+    `tau_thrust_s`, `actuator_delay_s` (Ixx/Iyy/Izz dropped off).
+    `tarot680b_reference` → exit 0, unchanged.
+
+`[INTERPRETATION]` The wiring YAML → MJCF → `mjModel` is correct and exact
+for mass, inertia, inertial frame and motor geometry.
+
+`[CAUTION]` Not established: any propulsion or closed-loop fidelity; any
+ground-contact behavior of this vehicle (no gear geometry ⇒ no contact
+geoms); that the off-diagonal products are small; that the manual-stopwatch
+inertia is accurate beyond its recorded scatter (R² N/A; the Ixx/Iyy ≈ 1.21
+ratio is recorded, not explained). No real-flight or SI validation.
+
+`[OPEN]` `MuJoCoDynamics` / `MujocoLandingEnv` still cannot be built from the
+measured config (`max_collective_thrust_n`, `tau_roll/pitch/thrust`,
+`actuator_delay_s`, and gear geometry). `MUJOCO_MODEL.md` (root-level,
+outside this session's write scope) still describes the provisional
+reference values and the §D `a` wording error — needs a user-approved edit.
+`[RESOLVED — 2026-09-19, later pass]` The user authorized that edit and
+`MUJOCO_MODEL.md` was rewritten (documentation only — no YAML, Python, MJCF
+builder or test change): measured vs reference configurations separated
+(§H.1 / §H.2), `a` vs `R` corrected, measured inertia / geometry / compiled
+`mjModel` values added, the landed-pose ground plane (body z = +0.241 m) and
+the `ground_clearance_m` / leg-sphere-radius finding documented, x500 shell
+scale caveat (0.737 vs measured 0.720 m) recorded, stale test list refreshed.
+The gravity constants 9.8065 (`landing_rl`) vs 9.80665 (`landing_mujoco`) are
+still un-reconciled.
+
+`[TODO]` Minimum propulsion/actuator inputs, in order: (1) propulsion bench
+for the MN501-S + MS1704 pair → `max_collective_thrust_n` (and per-motor
+max); (2) landing-gear contact points or `ground_clearance_m`; (3) after PX4
+gains are stabilized (CLAUDE.md §3): `tau_roll_s`, `tau_pitch_s`,
+`tau_thrust_s`, `actuator_delay_s` from closed-loop SI. `k_f` / `k_m` / motor
+time constant only if a rotor-level backend is later chosen.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD
+`6306699871122cd985a3e35ebd1b93ce575aeaa4` (unchanged — nothing staged or
+committed). Modified: `PROJECT_HANDOVER.md`, `MUJOCO_MODEL.md` (added by the
+later documentation-only pass, see the `[RESOLVED]` note above),
+`landing_mujoco/configs/
+{param_schema.py, ugrp_vehicle_measured.yaml}`,
+`landing_mujoco/dynamics/mjcf_builder.py`,
+`landing_mujoco/tests/test_param_schema.py`. Untracked:
+`landing_mujoco/tests/{test_ugrp_measured_params.py,
+test_measured_mjcf_injection.py}`, `MUJOCO_LOG.TXT`. Not pushed.
+
+### 2026-09-19 (third pass) — landed-pose geometry: physical ground clearance 0.241 m vs. simulation gear sphere (radius 0.020 m, centre offset 0.221 m)
+
+Scope: **`landing_mujoco` physical-model representation only.** No
+observation / action / reward / termination / perception / latency /
+`BaselineController` / PPO / VecNormalize / checkpoint change; `landing_rl`,
+`mujoco_rl`, `system_id` untouched (`git diff` empty for them). No propulsion
+value invented or tuned. Per-leg gear x/y were **not** estimated.
+
+`[DECISION — user, 2026-09-19]` In the normal landed pose (gear on the ground)
+the CG is 0.241 m above the ground: `cg_body_m = [0,0,0]`, ground plane at body
+z = **+0.241 m** (FRD), and `ground_clearance_m = 0.241` is a **physical**
+vehicle parameter. The MuJoCo gear feet are spheres of radius 0.020 m; a sphere
+centre at the physical contact depth would rest the CG 0.020 m too high, so the
+centre must sit at `ground_clearance_m − radius = 0.221 m`. Parameter ownership:
+PHYSICAL = `ground_clearance_m` 0.241 / contact-point z +0.241; SIMULATION =
+radius 0.020 / centre z 0.221. **0.221 is never stored as a physical
+clearance.** This closes the `[OPEN]` convention question of the earlier
+2026-09-19 entries.
+
+`[FACT]` Before the change (read-only simulation, no file changed): reference
+gear point 0.120 ⇒ resting CG 0.1399 m; measured + synthetic gear 0.241 ⇒
+0.2609 m, 0.221 ⇒ 0.2409 m.
+
+IMPLEMENTATION
+  * `landing_mujoco/configs/param_schema.py` — `Geometry.landing_gear_points_
+    semantics` (`geom_center` legacy default | `physical_contact`), validated in
+    `__post_init__`, parsed from YAML; constants exported; docstrings of
+    `Geometry.ground_clearance_m` / `landing_reference_point_body_m` clarified.
+    **`landing_reference_point_body_m` logic unchanged.**
+  * `landing_mujoco/dynamics/mjcf_builder.py` — new pure function
+    `landing_gear_sphere_centers_body_m(geometry, radius)`: `physical_contact` ⇒
+    `centre_z = point_z − radius` (copy, never mutates the stored points);
+    `geom_center` ⇒ points unchanged; `None` ⇒ no geoms. `build_mjcf` builds the
+    collision spheres from it. `LEG_CONTACT_RADIUS_M = 0.02` stays a builder
+    constant, documented as a simulation representation.
+  * `landing_mujoco/configs/ugrp_vehicle_measured.yaml` — `ground_clearance_m:
+    0.241` (MEASURED, dated, `derived_from` the raw CG height);
+    `landing_gear_points_body_m` stays `null` (x/y UNKNOWN);
+    `landing_gear_points_semantics: physical_contact` declared explicitly;
+    header/`datum_note` updated with the landed-pose confirmation (the stale "not
+    stated" wording is gone). **`tarot680b_reference.yaml` untouched.**
+  * Tests — `test_ugrp_measured_params.py` 50 → 62 (new
+    `LandedPoseGroundClearanceTest`, incl. a forward guard that future physical
+    contact points must have z = `ground_clearance_m` — vacuous while they are null; the two assertions that pinned
+    `ground_clearance_m` as null / NOT_MEASURED were inverted, not deleted);
+    `test_measured_mjcf_injection.py` 27 → 44 (new `PhysicalVsSimulationGearTest`,
+    `LandedPoseSettleTest`; the precision test now covers both readings).
+  * `MUJOCO_MODEL.md` — ground-plane section rewritten around the three
+    quantities, verification table and tolerance basis; §H.1 / header / §G /
+    Running / Not-done synced.
+
+VALIDATION
+  * `python3 -m unittest discover -s landing_mujoco/tests -t .` → **191 OK**
+    (162 + 29), including the reference-config MJCF hash pin
+    (`PRE_VISUAL_PHYSICS_MJCF_SHA256`) **unchanged**.
+  * `... -s landing_rl/tests -p "test_*.py"` → **218 OK** (unchanged);
+    `... -s system_id/tests -t .` → **67 OK**.
+  * `check_parameter_set --parameter-set ugrp_vehicle_measured` → exit 1, the
+    same 5 missing fields (`max_collective_thrust_n`, `tau_roll/pitch/thrust_s`,
+    `actuator_delay_s`); `tarot680b_reference` → exit 0.
+  * Mutation checks: skipping the `− radius` conversion, and flipping its sign,
+    each made 13 tests fail; builder restored and byte-compared.
+
+EXPERIMENT (dynamic landed pose; `LandedPoseSettleTest`): measured mass and
+inertia + YAML `ground_clearance_m`; ground plane world z = 0; gravity −9.80665;
+**synthetic** per-leg x/y (square ±0.25 / rectangle ±0.15×±0.30 / triangle
+r = 0.25 m — test data only); released level, from rest, 0.5 m up, no thrust;
+3 s at `physics_dt` 0.002.
+
+RESULT
+  | layout | legs | CG world z | error | sphere bottom world z |
+  |---|---|---|---|---|
+  | square | 4 | 0.24092 m | −0.079 mm | −0.079 mm |
+  | rectangle | 4 | 0.24092 m | −0.079 mm | −0.079 mm |
+  | triangle | 3 | 0.24089 m | −0.105 mm | −0.105 mm |
+
+  Sphere centre world z ≈ 0.0199 m; landing reference point (CG − 0.241)
+  reaches the ground; unchanged for `physics_dt` {0.001, 0.002, 0.005} and drop
+  {0.3, 0.5} m (spread < 0.01 mm). Negative control (0.241 read as the sphere
+  centre): CG 0.2609 m, +19.9 mm. Tolerance ±2 mm: penetration is linear in
+  contact load (≈ 5 µm/N, `n × pen` = 0.316 mm for 4 and 3 legs), a single
+  contact carrying the full 62.8 N would sink ≈ 0.32 mm ⇒ ±2 mm ≈ 6× that and
+  ≈ 10× below the 20 mm error to be caught.
+
+`[INTERPRETATION]` The landed height is independent of the unknown gear x/y,
+which is why synthetic x/y are acceptable in the test; the representation is
+now consistent with the measured 0.241 m.
+
+`[CAUTION]` `[FACT]` The reference config's `ground_clearance_m = 0.12` is its
+legacy `geom_center` gear-point z (a sphere centre); its actual CG-to-ground
+distance is 0.14 m, so it does not satisfy the physical definition adopted for
+the measured vehicle. Synthetic, unread there (gear points exist), left
+untouched. See `MUJOCO_MODEL.md`.
+
+`[CAUTION]` Not established: real per-leg x/y, tip-over / touchdown behaviour
+of the real gear, the real foot geometry (a sphere is a proxy), any propulsion
+or closed-loop fidelity. `physical_contact` points assume a level landing and a
+vertical foot axis. `landing_gear_points_body_m` and `ground_clearance_m` are
+two descriptions of one fact with no automatic consistency check yet.
+`landing_reference_point_body_m()` on the measured config returns
+`[0, 0, 0.241]` with x/y **assumed** centred (a fallback, not a measurement).
+
+`[OPEN]` `MuJoCoDynamics` / `MujocoLandingEnv` still cannot be built from the
+measured config: it now stops at `IdentifiedWrenchActuation` (thrust, τ, delay
+`null`), no longer at the landing reference point.
+
+`[TODO]` (1) measure per-leg contact x/y and fill
+`landing_gear_points_body_m` as PHYSICAL contact points (z = 0.241 for a level
+landing); (2) propulsion bench ⇒ `max_collective_thrust_n`; (3) closed-loop SI
+(after PX4 gain stabilization) ⇒ `tau_roll/pitch/thrust`, `actuator_delay_s`.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD
+`6306699871122cd985a3e35ebd1b93ce575aeaa4` (unchanged — nothing staged or
+committed). Modified: `PROJECT_HANDOVER.md`, `MUJOCO_MODEL.md`,
+`landing_mujoco/configs/{param_schema.py, ugrp_vehicle_measured.yaml}`,
+`landing_mujoco/dynamics/mjcf_builder.py`,
+`landing_mujoco/tests/test_param_schema.py`. Untracked:
+`landing_mujoco/tests/{test_ugrp_measured_params.py,
+test_measured_mjcf_injection.py}`, `MUJOCO_LOG.TXT`. Not pushed.
+
+### 2026-09-19 (fourth pass) — skid-type landing gear footprint recorded; four contact spheres in the measured MuJoCo model; landed and ±5° tilted contact verified
+
+Scope: **landing-gear geometry only** (measured YAML, tests, documentation). No
+change to propulsion, controller, RL contract, mass / inertia, motor geometry,
+CG, ground clearance or `landing_rl` / `mujoco_rl` / `system_id`. **No builder or
+schema code change this session** — the existing physical→simulation conversion
+(`landing_gear_sphere_centers_body_m`, `landing_gear_points_semantics`) was
+reused. Nothing was tuned (no contact stiffness / friction / restitution change).
+
+`[FACT — USER_CONFIRMED, 2026-09-19]` The real gear is helicopter-style: two
+continuous parallel skid bars whose long direction is body X (the roll axis).
+Skid effective length **0.300 m**, centre-line spacing **0.310 m**; CG → ground
+**0.241 m** (already MEASURED). `[DERIVED]` half length 0.150 m, half spacing
+0.155 m.
+
+`[DECISION — user, 2026-09-19]` For v0, approximate the two continuous bars by
+**four representative physical contact points at the skid endpoints**, centred
+and symmetric about the CG (FRD, +Y right): left-front `[+0.150, −0.155, +0.241]`,
+left-rear `[−0.150, −0.155, +0.241]`, right-front `[+0.150, +0.155, +0.241]`,
+right-rear `[−0.150, +0.155, +0.241]`, read as `physical_contact`. The sphere
+centre (0.241 − 0.020 = 0.221 m) is derived by the builder and never stored.
+`[CAUTION]` Provenance is **`DERIVED_FROM_MEASURED_DIMENSIONS` +
+`CENTERED_SYMMETRY_ASSUMPTION`**, not "fully measured point coordinates": the
+centring on the CG (the actual per-leg offset from the CG) is an assumption.
+
+IMPLEMENTATION
+  * `landing_mujoco/configs/ugrp_vehicle_measured.yaml` — `landing_gear_points_
+    body_m` filled with the four points; `meta.landing_gear_points_body_m`
+    rewritten `NOT_MEASURED → DERIVED_FROM_MEASURED_DIMENSIONS` with
+    `assumptions: [CENTERED_SYMMETRY_ASSUMPTION]`, `skid_geometry` (length,
+    spacing = USER_CONFIRMED; half values = DERIVED; centering = assumption;
+    point order; v0 approximation text); header + provenance vocabulary updated.
+    `ground_clearance_m` stays 0.241; `landing_gear_points_semantics:
+    physical_contact` unchanged. **`tarot680b_reference.yaml` untouched.**
+  * Tests — `test_ugrp_measured_params.py` 62 → 77 (new `MeasuredSkidFootprintTest`:
+    count, contact z, x/y extents, centred symmetry, semantics, 0.221 conversion,
+    no-contamination, skid direction, provenance, recompute-from-dimensions,
+    reference point, "other parameters unchanged"); `test_measured_mjcf_injection.py`
+    44 → 59 (new `MeasuredSkidCompiledGeometryTest`, `TiltedContactTest`;
+    `PhysicalVsSimulationGearTest` / `LandedPoseSettleTest` moved from SYNTHETIC
+    x/y to the canonical footprint; ground friction now the environment's 0.55).
+    The assertions that pinned the per-leg points as null / NOT_MEASURED were
+    inverted, not deleted.
+  * `MUJOCO_MODEL.md` — new "Landing-gear skid footprint" subsection, dynamic
+    verification rewritten with the canonical results, limitation stated.
+
+VALIDATION
+  * `python3 -m unittest discover -s landing_mujoco/tests -t .` → **221 OK**
+    (191 + 30), including the reference-config MJCF hash pin
+    (`PRE_VISUAL_PHYSICS_MJCF_SHA256`) **unchanged**.
+  * `... -s landing_rl/tests -p "test_*.py"` → **218 OK** (unchanged);
+    `... -s system_id/tests -t .` → **67 OK**.
+  * `check_parameter_set --parameter-set ugrp_vehicle_measured` → exit 1, the
+    same 5 missing propulsion fields; `tarot680b_reference` → exit 0.
+  * Mutation checks (YAML restored byte-identical afterwards): a flipped y sign
+    (38 failures), a contact z entered as the sphere centre 0.221 (34), a skid
+    length off by 5 mm (14), the builder skipping the radius offset (19) and the
+    builder bypassing the FRD→FLU helper (27).
+
+EXPERIMENT (landed): measured mass 6.408 kg and inertia; canonical skid
+footprint; ground plane world z = 0; gravity −9.80665; ground friction 0.55 (the
+environment's `LandingConfig.ground_friction_xy`); released level from rest 0.5 m
+up; 3 s at `physics_dt` 0.002.
+
+RESULT (landed)
+  * final CG world z **0.24098 m** (error −0.022 mm vs 0.241); sphere centre world
+    z 0.01998 m; lowest sphere bottom −0.0215 mm (= penetration); 4 contacts;
+    residual speed ~1e-15. Negative control (0.241 read as the sphere centre):
+    0.2610 m, +20 mm.
+  * Tolerance ±2 mm: settled penetration is linear in contact load at fixed
+    friction and depends on μ (0.0054 / 0.0215 / 0.0795 / 0.184 mm at μ = 0.3 /
+    0.55 / 0.9 / 1.2); the worst single-contact extrapolation (0.74 mm at μ = 1.2)
+    is < ½ of the tolerance.
+
+RESULT (tilted, 5°, lowest sphere bottom 20 mm above ground, 3 s): the low-side
+skids touch first (roll+ → right, pitch+ → rear; equals the prediction from the
+repository's NED rotation); net contact torque at first contact is restoring
+(roll ±5°: τx ∓15.65 N·m; pitch ±5°: τy ∓13.19 N·m; roll+pitch: τx −20.06,
+τy −17.92); no NaN or solver warning; peak body rate ≤ 1.91 rad/s; peak
+penetration 4.31 mm (single axis; level control 4.32 mm) / 7.79 mm (roll+pitch,
+one skid takes the impact) — always below the 20 mm sphere radius; the vehicle
+settles level at CG 0.24098 m with all bottoms −0.022 mm; friction slide 2.2 cm
+(0.8 cm combined), yaw −0.5° (combined). Static tip-over angle of the footprint
+(derived, not tested): 32.7° roll, 31.9° pitch.
+
+`[CORRECTION]` The third-pass entry above quoted settled penetrations of
+0.079 / 0.105 mm and "≈ 5 µm/N". Those were measured at the **builder's default**
+ground friction μ = 0.9, not at the environment's **0.55** (the environment passes
+`LandingConfig.ground_friction_xy` to `build_mjcf`). At μ = 0.55 the 4-leg value is
+0.0215 mm. The ±2 mm tolerance holds in both cases; tests now use 0.55.
+
+`[INTERPRETATION]` With a real footprint, the current contact model is sane for
+level and ±5° landings on this geometry, and the measured 0.241 m clearance is
+reproduced to 0.02 mm.
+
+`[CAUTION]` Not established: the real per-leg offset from the CG (centring is an
+assumption); behaviour on a continuous skid (four endpoint spheres cannot
+represent line contact or an intermediate contact point); the real foot shape (a
+sphere is a proxy); contact stiffness / friction / restitution against real
+touchdowns (defaults, untuned); anything about propulsion or closed-loop
+fidelity. The 5° cases start 20 mm above the ground — larger impact speeds give
+larger transient penetration in the default soft contact (level drop, μ = 0.55:
+2.1 mm at 0.31 m/s, 4.3 mm at 0.63 m/s, 6.5 mm at 0.99 m/s, 9.4 mm at 1.4 m/s,
+16 mm at 2.2 m/s). The 12 mm bound in `TiltedContactTest` applies only to its
+20 mm-lift scenario.
+
+`[OPEN]` `MuJoCoDynamics` / `MujocoLandingEnv` still cannot be built from the
+measured config (thrust, τ, delay `null`). Landing-gear geometry is no longer a
+blocker for that.
+
+`[TODO]` (1) propulsion bench ⇒ `max_collective_thrust_n`; (2) closed-loop SI
+after PX4 gain stabilization ⇒ `tau_roll/pitch/thrust`, `actuator_delay_s`;
+(3) optionally measure the real skid-footprint offset from the CG and replace the
+centring assumption.
+
+GIT STATE: branch `refactor/landing-rl-architecture`, HEAD
+`6306699871122cd985a3e35ebd1b93ce575aeaa4` (unchanged — nothing staged or
+committed). Modified: `PROJECT_HANDOVER.md`, `MUJOCO_MODEL.md`,
+`landing_mujoco/configs/{param_schema.py, ugrp_vehicle_measured.yaml}`,
+`landing_mujoco/dynamics/mjcf_builder.py`,
+`landing_mujoco/tests/test_param_schema.py`. Untracked:
+`landing_mujoco/tests/{test_ugrp_measured_params.py,
+test_measured_mjcf_injection.py}`, `MUJOCO_LOG.TXT`. Not pushed.
+
+---
+
+## 2026-09-25 — RL Baseline v0.1 packaging (repository engineering; no research-behaviour change)
+
+Detail lives in §0.12; this entry preserves the provenance.
+
+[FACT] Trigger: a read-only audit earlier the same day concluded NOT READY FOR TEAM BASELINE, mainly for
+reproducibility: fresh-clone PID-only evaluation failed (`FileNotFoundError` for the PPO `.zip`), the checkpoint gate
+hard-coded a developer's home path, no root dependency definition or RL quickstart existed, and the measured-vehicle
+work and its 136 tests (`test_ugrp_measured_params.py` 77, `test_measured_mjcf_injection.py` 59) were uncommitted.
+
+IMPLEMENTATION: see the commit table in §0.12 (`6c4fd81`, `a666ab8`, `7d65074`, `b633024`, `9dd5563`). New:
+`landing_rl/evaluation/{__init__,artifacts,smoke}.py`, `landing_rl/tests/{test_evaluation_artifacts,test_smoke}.py`,
+`BASELINE.md`, `MODEL_ARTIFACTS.md`, `requirements.txt`. Modified: `README.md`, `mujoco_rl/eval_compare_v2.py`,
+`mujoco_rl/eval_robustness_paper.py`, `mujoco_rl/eval_env_stage0.py`, `mujoco_rl/scripts/{plot_trajectory,smoke_test}.py`,
+`landing_rl/tests/{test_checkpoint_compatibility,test_entry_point_migration}.py`. `eval_env_stage0.py` keeps its CRLF
+line endings. One structural finding while editing: `test_entry_point_migration.py` (test C) pinned the literal
+`./runs/...` strings in the eval scripts; it now pins the pair-of-record identity through `artifacts.py`, and its
+`eval_env_stage0.py` literals were updated to the stage-1 pair.
+
+PHYSICAL / CONTROL MEANING: none. No physics, controller, reward, observation, action, randomization or timing change.
+
+VALIDATION (exact commands, artifacts via `UGRP_RL_ARTIFACT_DIR=<maintainer runs dir>`, strict mode):
+`python3 -m unittest discover -s landing_rl/tests -p "test_*.py"` (238 OK, 190 s);
+`python3 -m unittest discover -s landing_mujoco/tests -t . -p "test_*.py"` (221 OK, 55.7 s);
+`python3 -m unittest discover -s system_id/tests -t . -p "test_*.py"` (67 OK, 8.8 s).
+Also: `python3 -m landing_rl.evaluation.smoke`; skip and strict-failure behaviour of the checkpoint gate checked directly.
+
+EXPERIMENT (reference reproduction, seeds 5000-5199 and 7000-7199, 200 episodes per cell):
+`python3 -m mujoco_rl.eval_compare_v2` and `python3 -m mujoco_rl.eval_robustness_paper --output-dir <scratch>` with the
+v4 pair; PID-only from another working directory with no artifacts via
+`python3 mujoco_rl/eval_compare_v2.py --policy pid`.
+
+RESULT: `eval_compare_v2` output identical to the archived file (PID 190, random 183, PPO 191 of 200); the three robustness
+CSVs byte-identical to the archived ones; PID-only 190/200 reproduced without artifacts.
+
+[INTERPRETATION] The refactored evaluation path and the current environment code reproduce the archived paper results
+exactly, so the packaging changes did not alter evaluation behaviour.
+
+[CAUTION] Reproducibility is not performance evidence (§0.12). Only the evaluation of the pair of record was
+reproduced; training from scratch remains unreproducible. `requirements.txt` was resolved with `pip install --dry-run`
+in a fresh venv, not installed from scratch.
+
+[OPEN] Push approval; artifact hosting; missing stage-0 / stage-2-v3 scripts; baseline branch choice; deployed-PID vs
+simulated-PID gap.
+
+GIT STATE: branch `refactor/landing-rl-architecture`; 5 packaging/measured-vehicle commits on top of `6306699` plus this
+handover commit (`git log -1 -- PROJECT_HANDOVER.md`); remote `origin/refactor/landing-rl-architecture` is 6 commits
+behind before this session's commits; nothing pushed. Untracked: `MUJOCO_LOG.TXT` (not committed by design).
