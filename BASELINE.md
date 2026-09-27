@@ -171,6 +171,39 @@ row are in `robustness_summary.csv` / `robustness_episodes.csv`). The three resu
 beats PID: in every archived case the paired exact McNemar p-value is 0.125 or larger and the Wilson intervals overlap.
 The dominant failure in this environment is `excessive_bounce`, for PID as well as PPO.
 
+## Clean-room reproduction
+
+Performed on a separate fresh Ubuntu machine, fresh clone of `refactor/landing-rl-architecture` at commit
+`553fdfd44da9762ab878294b7dabb891c4172ad9`, Python 3.10.12, new venv, `pip install -r requirements.txt` (before
+the matplotlib fix below).
+
+* `landing_rl` tests: 233 OK, skipped=1 (artifact-dependent checkpoint test) without artifacts; 238 OK, no skip with
+  the pair of record present.
+* `landing_mujoco` tests: 221 OK.
+* `system_id` tests: 67 run, OK, skipped=6 (a `ResourceWarning` in `test_loader.py` was observed but did not fail
+  the suite).
+* `python -m landing_rl.evaluation.smoke`: PASS, `obs=(16,)`, `action=(3,)`.
+* `eval_compare_v2 --policy pid`: 190/200 = 95.0%, matching the table above.
+* `eval_compare_v2 --policy ppo`: 191/200 = 95.5%, matching the table above, after copying in the pair of record
+  and verifying its SHA256 against `MODEL_ARTIFACTS.md`.
+
+Two setup issues surfaced by this run were fixed after `553fdfd` (see `requirements.txt` and the README quick
+start): `matplotlib` is required by `landing_rl/tests/test_entry_point_migration.py` (it loads
+`mujoco_rl/scripts/plot_trajectory.py`, which imports `matplotlib.pyplot` at module scope) but was listed as
+commented-out/optional in `requirements.txt`; and a fresh Debian/Ubuntu install may need the OS `python3-venv`
+package before `python3 -m venv` works. The clean-room run above installed matplotlib by hand after hitting the
+first issue; it predates both fixes.
+
+Independently re-run 2026-09-28 against the tree that adds those two fixes (commit `6ac534b`, a docs-only change
+on top of `553fdfd`), on WSL2, system Python 3.10.12 (not a clean venv; matplotlib and the rest of
+`requirements.txt` were already present, so this run does not by itself validate the requirements.txt fix), with
+the pair of record supplied via `UGRP_RL_ARTIFACT_DIR`. Every result above was reproduced identically: 233/238,
+221, 67 (skipped=6, same `ResourceWarning`), smoke PASS, PID 190/200, PPO 191/200 = 95.5%.
+
+This confirms the baseline is reproducible across two machines and across the docs-only fix commit. It is not
+additional evidence that PPO statistically outperforms PID (see the McNemar/Wilson caveat above), and the PPO
+policy was still trained on the analytical `landing_rl` environment, not the measured MuJoCo model.
+
 ## Training lineage (what is and is not reproducible)
 
 Training from scratch is **not** reproducible from this repository. Facts read from the artifacts (`num_timesteps` of

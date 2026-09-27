@@ -22,6 +22,9 @@ torch==2.12.1
 mujoco==3.4.0
 # landing_mujoco config loading (param_schema.py, visualization_config.py)
 PyYAML>=5.4.1,<7
+# landing_rl/tests/test_entry_point_migration.py loads mujoco_rl/scripts/plot_trajectory.py,
+# which imports matplotlib.pyplot at module scope; required for the mandatory regression suite.
+matplotlib>=3.10.5
 
 # --- system_id/ (ULog preprocessing) ---
 pyulog>=1.2.2
@@ -30,7 +33,6 @@ scipy>=1.15.3
 
 # --- optional; uncomment when needed (versions verified on the same machine) ---
 # tensorboard>=2.21.0     # only for training: the mujoco_rl/train_*.py scripts set tensorboard_log
-# matplotlib>=3.10.5      # landing_mujoco/evaluation/compare_old_vs_mujoco.py, legacy plot script
 # pytest>=6.2.5           # optional runner; the suites are unittest-based (python -m unittest works)
 # trimesh                 # only landing_mujoco/tools/convert_x500_visual_assets.py (asset conversion)
 # Pillow>=11.3.0          # same tool

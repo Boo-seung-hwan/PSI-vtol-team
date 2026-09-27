@@ -24,6 +24,14 @@ Run every command from the repository root.
 
 **1. Create the environment** (Python >= 3.10; verified on 3.10.12)
 
+On a fresh Debian/Ubuntu install, `python3 -m venv` may fail because the OS package providing `ensurepip` is not
+installed. If so:
+
+```bash
+sudo apt update
+sudo apt install python3-venv          # Ubuntu 22.04 / Python 3.10: the concrete package is python3.10-venv
+```
+
 ```bash
 git checkout refactor/landing-rl-architecture
 python3 -m venv .venv
