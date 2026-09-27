@@ -194,7 +194,7 @@ commented-out/optional in `requirements.txt`; and a fresh Debian/Ubuntu install 
 package before `python3 -m venv` works. The clean-room run above installed matplotlib by hand after hitting the
 first issue; it predates both fixes.
 
-Independently re-run 2026-09-28 against the tree that adds those two fixes (commit `6ac534b`, a docs-only change
+Independently re-run 2026-09-28 against the tree that adds those two fixes (commit `9cb8027`, a docs-only change
 on top of `553fdfd`), on WSL2, system Python 3.10.12 (not a clean venv; matplotlib and the rest of
 `requirements.txt` were already present, so this run does not by itself validate the requirements.txt fix), with
 the pair of record supplied via `UGRP_RL_ARTIFACT_DIR`. Every result above was reproduced identically: 233/238,

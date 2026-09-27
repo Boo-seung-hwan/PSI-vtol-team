@@ -3216,3 +3216,25 @@ simulated-PID gap.
 GIT STATE: branch `refactor/landing-rl-architecture`; 5 packaging/measured-vehicle commits on top of `6306699` plus this
 handover commit (`git log -1 -- PROJECT_HANDOVER.md`); remote `origin/refactor/landing-rl-architecture` is 6 commits
 behind before this session's commits; nothing pushed. Untracked: `MUJOCO_LOG.TXT` (not committed by design).
+
+## 2026-09-28 — Clean-room reproduction fixes (repository engineering; no research-behaviour change)
+
+[FACT] A clean-room reproduction was performed on a separate fresh Ubuntu / Python 3.10.12 environment against
+commit `553fdfd` (before this session's fix). Results: `landing_rl` 238 PASS with the canonical PPO/VecNormalize
+artifacts present; `landing_mujoco` 221 PASS; `system_id` 67 PASS, 6 skipped; `python -m landing_rl.evaluation.smoke`
+PASS; PID reference reproduced at 190/200 = 95.0%; PPO reference reproduced at 191/200 = 95.5%; the PPO model and
+VecNormalize files matched their recorded SHA256 in `MODEL_ARTIFACTS.md`.
+
+[FACT] Two setup issues were found: (1) `README.md`'s quick start did not mention the OS `python3-venv`
+prerequisite needed on a fresh Debian/Ubuntu install before `python3 -m venv` works; (2) `matplotlib` is imported
+at module scope by `mujoco_rl/scripts/plot_trajectory.py`, which the mandatory `landing_rl` regression suite
+(`test_entry_point_migration.py`) loads, but `requirements.txt` listed `matplotlib` as optional.
+
+IMPLEMENTATION: both issues fixed on `refactor/landing-rl-architecture` (`README.md`, `requirements.txt`,
+`BASELINE.md`). No RL, MuJoCo, or system_id behaviour source changed.
+
+[CAUTION] The trained PPO baseline remains the analytical `landing_rl`-environment policy; it is still not trained
+on the measured-UGRP MuJoCo model (§0.4, `BASELINE.md`).
+
+[OPEN] Shared artifact hosting for the PPO/VecNormalize pair is still unresolved. A `ResourceWarning` (unclosed file)
+in `system_id/tests/test_loader.py` remains unresolved; it is non-blocking (the suite still passes).
